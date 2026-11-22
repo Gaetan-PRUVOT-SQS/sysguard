@@ -1,0 +1,89 @@
+global:
+  # frequence d'evaluation des regles
+  check_interval: 15s
+  # debug, info, warn, error
+  log_level: info
+  # durees par defaut des actions
+  exec_timeout: 10s
+  webhook_timeout: 10s
+
+rules:
+  - name: high-cpu
+    severity: warning
+    condition:
+      metric: cpu.usage
+      operator: ">"
+      value: 90
+    for: 2m
+    cooldown: 10m
+    actions:
+      - type: log
+        # level optionnel, sinon la severite de la regle
+        level: warn
+        message: "CPU eleve depuis 2 minutes : {{.Value}}%"
+
+  - name: disk-full
+    severity: critical
+    condition:
+      metric: disk.usage
+      mount: "/"
+      operator: ">"
+      value: 90
+    for: 1m
+    actions:
+      - type: exec
+        command: /usr/local/bin/cleanup-logs.sh
+        timeout: 30s
+      - type: webhook
+        url: "https://ntfy.sh/mon-topic"
+        message: "Disque plein sur {{.Hostname}} : {{.Value}}%"
+
+  - name: mem-critique
+    severity: critical
+    condition:
+      metric: mem.usage
+      operator: ">"
+      value: 95
+    for: 1m
+    cooldown: 30m
+    actions:
+      - type: log
+
+# Optimiseur (unité sysguard-opt.service, `sysguard optimise`) :
+# PSI, zram et tuning mémoire. Sans la section, `optimise` refuse.
+# zram_provisionner: oui crée le swap compressé s'il n'existe aucun swap
+# (modprobe + mkswap + swapon priorité 100) et écrit
+# /etc/systemd/zram-generator.conf pour la persistance aux boots suivants
+# (installer le paquet systemd-zram-generator). Un swap disque existant
+# bloque le provisionnement (risque d'inversion LRU, voir
+# docs/justifications/provisionnement-zram.md). zswap: desactive coupe la
+# double compression devant zram.
+# optimisation:
+#   intervalle: 10s
+#   swappiness: auto        # auto = 133 si zram présent, sinon intact
+#   page_cluster: auto      # auto = 0 si zram présent
+#   zram_algorithme: zstd   # appliqué si le device le permet (sinon au boot)
+#   critique_seuil: 60      # % de full avg10
+#   critique_duree: 30s
+#   critique_sortie: 40     # hystérésis de sortie
+#   actions_critique:
+#     - type: log
+#       message: "pression mémoire critique : {{.Value}}%"
+
+# Optimisation CPU (unité sysguard-opt, même binaire) :
+# cpu:
+#   gouverneur: schedutil   # ou performance ; absent/VM → dégradé
+#   affinites:
+#     - nom: montraitement
+#       coeurs: "0-1"       # masques larges conseillés (L3/NUMA)
+#   critique_seuil: 80      # % de some avg10 (PSI cpu)
+#   critique_duree: 30s
+#   critique_sortie: 50     # hystérésis de sortie
+#   soutenue_seuil: 40
+#   soutenue_duree: 60s
+#   demotion:               # opt-in : jamais de processus inconnu
+#     nice: 19
+#     patterns:
+#       - montraitement
+#     exceptions:
+#       - sshd

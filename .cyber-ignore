@@ -1,0 +1,17 @@
+# Faux positifs du scan de secrets (gitleaks), avec justification.
+# Mécanisme effectif : .gitleaks.toml (allowlist par chemin, chargé par
+# gitleaks depuis la racine scannée, indépendant du cwd du processus).
+
+# Artefacts de la VM de test locale (vm/build, ignoré de git) :
+# disque.qcow2 est une image disque binaire : les « clés » détectées sont
+# les clés hôtes et les hash du système invité, jamais des secrets de
+# l'hôte. Empreintes non durables : les offsets bougent à chaque usage VM.
+vm/build/disque.qcow2
+
+# Clé SSH jetable générée localement par vm/preparer-vm.sh pour la VM de
+# test (réseau qemu user, port 2222 sur localhost). Régénérable ; effacer
+# la clé seule verrouillerait le disque existant. Jamais publiée.
+vm/build/cle-vm
+
+# Console de boot de la VM : hash noyau/DM pris pour une clé d'API.
+vm/build/console-vm.log

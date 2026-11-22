@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "artefacts de la VM de test locale (voir .cyber-ignore)"
+paths = ['''(^|/)vm/build/''']
