@@ -408,3 +408,37 @@ service à capacités bornées appartiennent au service ou à son groupe.
 
 `make test` : 203 cas verts (181 unitaires + 26 intégration) ;
 couverture ≥ 90 ; clippy deny, fmt propres ; audit 0.
+
+## Stabilisation post-revue de l'exploitant — 2026-11-22
+
+Revue en cinq points (privilèges systemd, webhook, descendance exec,
+distribution, CI). Livré et justifié dans
+docs/justifications/stabilisation.md :
+
+- **CI confinée** : job `campagne` en read (auto-correctifs fmt/clippy,
+  relance complète, patch en artifact), job `correctif` seul en write
+  (commit mécanique), secret `CI_PUSH_TOKEN` optionnel pour un jeton
+  dédié. Workflow release sur tag `v*` : campagne verte puis tar.gz +
+  paquet .deb attachés.
+- **exec descendance** : spawn en `process_group(0)`, timeout =
+  `kill(-pgid, SIGKILL)`. Régression : script avec arrière-plan, preuve
+  `/proc/<pid>` absent ; mutation prouvée (sans kill du groupe le test
+  échoue).
+- **webhook anti-SSRF** : destinations internes refusées par défaut
+  (loopback, privées, lien local, CGNAT, TEST-NET, métadonnées, v6
+  équivalentes), clé `local: oui` opt-in, hôte/chemin bornés aux
+  caractères visibles (anti-injection d'en-tête), connexion sur les
+  adresses résolues et vérifiées (anti rebinding DNS). TLS maintenu en
+  tranche future (pas de TLS maison, rustls contre le choix zéro-dep).
+- **distribution** : paquet .deb (dpkg-deb, postinst/prerm/postrm),
+  `scripts/installer.sh` / `desinstaller.sh`, mainteneur du paquet via
+  variable de dépôt `DEB_MAINTAINER` (aucune info personnelle poussée).
+  Cycles réels prouvés sur la machine de dev : `dpkg -i` → `-r` → `-P`
+  et archive tar.gz → installer → desinstaller --purge. L'exemple de
+  config proposait un webhook `https://` que l'envoi refuse : corrigé en
+  `http://` avec commentaire SSRF. Point ouvert signalé : pas de fichier
+  LICENSE dans le dépôt (copyright du paquet à trancher).
+
+`make campagne` : 212 cas verts (186 unitaires + 26 intégration et
+réels), code de sortie 0 ; couverture lignes 94,57 / régions 93,85 ;
+clippy deny, fmt propres ; audit 0.
