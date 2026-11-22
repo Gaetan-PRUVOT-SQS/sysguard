@@ -1,11 +1,12 @@
 use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
 use crate::action::{ActionCours, ContexteAction, template_applique, variables};
 use crate::config::Config;
 use crate::error::{Error, Result};
 
+#[derive(Debug)]
 pub struct Cible {
     pub host: String,
     pub port: String,
@@ -25,6 +26,9 @@ pub fn cible_depuis_url(url: &str) -> Result<Cible> {
     if host.is_empty() {
         return Err(Error::new("webhook : hote absent"));
     }
+    if !hote_valide(host) {
+        return Err(Error::new("webhook : hote invalide"));
+    }
     let port = match port {
         None => "80".to_string(),
         Some(p) if p.is_empty() || p.len() >= 16 => {
@@ -37,11 +41,60 @@ pub fn cible_depuis_url(url: &str) -> Result<Cible> {
     } else {
         String::new()
     };
+    if !chemin_valide(&chemin) {
+        return Err(Error::new("webhook : chemin invalide"));
+    }
     Ok(Cible {
         host: host.to_string(),
         port,
         chemin,
     })
+}
+
+/// Lettres, chiffres, points et tirets seulement : un hote avec espaces
+/// ou caracteres de controle injecterait des en-tetes HTTP.
+fn hote_valide(host: &str) -> bool {
+    !host.starts_with(['.', '-'])
+        && !host.ends_with('.')
+        && host
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-')
+}
+
+/// Caracteres ASCII visibles sans espace ni controle : le chemin part
+/// verbatim dans la ligne de requete.
+fn chemin_valide(chemin: &str) -> bool {
+    chemin.bytes().all(|b| (0x21..=0x7e).contains(&b))
+}
+
+/// Adresse interne (loopback, privee, lien local, metadonnees, test,
+/// multicast) : destination classique de SSRF depuis un daemon.
+pub fn interne(ip: &IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v) => {
+            let o = v.octets();
+            v.is_loopback()
+                || v.is_unspecified()
+                || v.is_broadcast()
+                || v.is_multicast()
+                || v.is_private()
+                || v.is_link_local()
+                || (o[0] == 100 && (64..=127).contains(&o[1]))
+                || (o[0] == 192 && o[1] == 0 && o[2] == 2)
+                || (o[0] == 198 && o[1] == 51 && o[2] == 100)
+                || (o[0] == 203 && o[1] == 0 && o[2] == 113)
+                || (o[0] == 198 && (o[1] == 18 || o[1] == 19))
+        }
+        IpAddr::V6(v) => {
+            let s = v.segments();
+            v.is_loopback()
+                || v.is_unspecified()
+                || v.is_multicast()
+                || (s[0] & 0xfe00) == 0xfc00
+                || (s[0] & 0xffc0) == 0xfe80
+                || (s[0] == 0x2001 && s[1] == 0xdb8)
+        }
+    }
 }
 
 pub fn json_echappe(s: &str) -> String {
@@ -111,11 +164,36 @@ pub fn envoit(ac: &ActionCours, cfg: &Config, ctx: &ContexteAction) -> Result<()
         .port
         .parse()
         .map_err(|_| Error::new("webhook : port invalide"))?;
+    let local = ac.act.local == Some(true);
+    // La resolution fait foi : la connexion part sur une adresse deja
+    // verifiee, pas sur une re-resolution qui pourrait rebondir ailleurs.
+    let adresses: Vec<SocketAddr> = (cible.host.as_str(), port)
+        .to_socket_addrs()
+        .map_err(|e| Error::new(format!("webhook : resolution impossible : {e}")))?
+        .collect();
+    if adresses.is_empty() {
+        return Err(Error::new("webhook : resolution impossible"));
+    }
+    if !local {
+        for a in &adresses {
+            if interne(&a.ip()) {
+                return Err(Error::new(
+                    "webhook : destination interne refusee (local: oui pour autoriser)",
+                ));
+            }
+        }
+    }
     let body = corps(ac, ctx);
     let req = requete(&cible, &body);
     let delai = delai_webhook(ac, cfg);
-    let mut flux = TcpStream::connect((cible.host.as_str(), port))
-        .map_err(|e| Error::new(format!("webhook : connexion impossible : {e}")))?;
+    let mut flux = None;
+    for a in &adresses {
+        if let Ok(f) = TcpStream::connect_timeout(a, delai) {
+            flux = Some(f);
+            break;
+        }
+    }
+    let mut flux = flux.ok_or_else(|| Error::new("webhook : connexion impossible"))?;
     flux.set_write_timeout(Some(delai))
         .map_err(|e| Error::new(format!("webhook : {e}")))?;
     flux.set_read_timeout(Some(delai))
@@ -140,6 +218,7 @@ pub fn accepte(reponse: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::net::IpAddr;
 
     #[test]
     fn cible_standard() {
@@ -160,10 +239,68 @@ mod tests {
 
     #[test]
     fn cible_refus() {
-        assert!(cible_depuis_url("https://exemple.invalid/hook").is_err());
-        assert!(cible_depuis_url("http://").is_err());
-        assert!(cible_depuis_url("http://127.0.0.1:/hook").is_err());
-        assert!(cible_depuis_url("http://h:1234567890123456/x").is_err());
+        for url in [
+            "https://exemple.invalid/hook",
+            "http://",
+            "http://127.0.0.1:/hook",
+            "http://h:1234567890123456/x",
+        ] {
+            assert!(cible_depuis_url(url).is_err(), "{url}");
+        }
+    }
+
+    #[test]
+    fn hote_et_chemin_injectables_refuses() {
+        for url in [
+            "http://hote exemple/x", // espace : injection d'en-tete
+            "http://hote\n.bad/x",   // retour ligne : injection d'en-tete
+            "http://[::1]:9999/x",   // crochets hors grammaire host
+            "http://hote.bad/ chemin",
+            "http://hote.bad/x\r\nHost: autre",
+        ] {
+            let e = cible_depuis_url(url).expect_err(url);
+            let m = e.to_string();
+            assert!(
+                m.contains("hote invalide") || m.contains("chemin invalide"),
+                "{url} : {m}"
+            );
+        }
+        assert!(cible_depuis_url("http://mon-serveur.domaine/a?b=1&c=d").is_ok());
+        assert!(cible_depuis_url("http://hote.bad").is_ok());
+    }
+
+    #[test]
+    fn adresses_internes() {
+        for ip in [
+            "127.0.0.1",
+            "10.1.2.3",
+            "172.16.5.5",
+            "172.31.255.255",
+            "192.168.1.1",
+            "169.254.169.254",
+            "100.64.0.1",
+            "100.127.255.255",
+            "0.0.0.0",
+            "255.255.255.255",
+            "224.0.0.1",
+            "192.0.2.5",
+            "198.51.100.5",
+            "203.0.113.5",
+            "198.18.0.5",
+            "::1",
+            "::",
+            "fe80::1",
+            "fd00::1",
+            "ff02::1",
+            "2001:db8::1",
+        ] {
+            let ip: IpAddr = ip.parse().expect("ip");
+            assert!(interne(&ip), "{ip} doit etre interne");
+        }
+        for ip in ["8.8.8.8", "1.1.1.1", "100.128.0.1", "172.32.0.1", "2606:4700::1111"] {
+            let ip: IpAddr = ip.parse().expect("ip");
+            assert!(!interne(&ip), "{ip} doit etre publique");
+        }
     }
 
     #[test]
@@ -231,6 +368,48 @@ mod tests {
         assert!(!accepte(rep));
     }
 
+    #[test]
+    fn destination_interne_refusee_par_defaut() {
+        let ctx = ContexteAction {
+            dry_run: false,
+            hostname: "h".to_string(),
+        };
+        let act = ReglePret::nouveau();
+        let ac = ActionCours {
+            act: &act.act,
+            regle: &act.regle,
+            valeur: 50.0,
+        };
+        let cfg = Config::default();
+        let e = envoit(&ac, &cfg, &ctx).expect_err("interne refusee");
+        assert!(
+            e.to_string().contains("destination interne refusee"),
+            "{e}"
+        );
+    }
+
+    #[test]
+    fn destination_interne_autorisee_par_local() {
+        let ctx = ContexteAction {
+            dry_run: false,
+            hostname: "h".to_string(),
+        };
+        let mut act = ReglePret::nouveau();
+        act.act.url = Some("http://127.0.0.1:1/hook".to_string());
+        act.act.local = Some(true);
+        let ac = ActionCours {
+            act: &act.act,
+            regle: &act.regle,
+            valeur: 50.0,
+        };
+        let cfg = Config::default();
+        let e = envoit(&ac, &cfg, &ctx).expect_err("rien n'ecoute sur le port 1");
+        assert!(
+            e.to_string().contains("connexion impossible"),
+            "{e}"
+        );
+    }
+
     struct ReglePret {
         regle: crate::config::Regle,
         act: crate::config::Action,
@@ -241,10 +420,11 @@ mod tests {
             let act = crate::config::Action {
                 kind: crate::config::TypeAction::Webhook,
                 timeout: None,
-                url: None,
+                url: Some("http://127.0.0.1:9999/hook".to_string()),
                 command: None,
                 message: Some("alerte {{.Value}} \"prioritaire\" {{.Hostname}}".to_string()),
                 niveau_log: None,
+                local: None,
             };
             let regle = crate::config::Regle {
                 nom: "web".to_string(),

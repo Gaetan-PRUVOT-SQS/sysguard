@@ -2,7 +2,7 @@ use crate::error::{Error, Result};
 use crate::log::level_from_text;
 use crate::yaml::Node;
 
-use super::{Action, TypeAction, scalaire};
+use super::{Action, TypeAction, booleen, scalaire};
 
 pub fn parse(noeud: &Node, dest: &mut Option<Vec<Action>>) -> Result<()> {
     let Node::List(items) = noeud else {
@@ -25,6 +25,7 @@ fn parse_action(item: &Node) -> Result<Action> {
         command: None,
         message: None,
         niveau_log: None,
+        local: None,
     };
     let Node::Map(entries) = item else {
         return Err(Error::new("action : carte attendue"));
@@ -49,6 +50,7 @@ fn champ(cle: &str, noeud: &Node, act: &mut Action) -> Result<()> {
             );
         }
         "timeout" => act.timeout = Some(duree_timeout(valeur)?),
+        "local" => act.local = Some(booleen("local", valeur)?),
         _ => return Err(Error::new(format!("cle inconnue : {cle}"))),
     }
     Ok(())
@@ -83,7 +85,11 @@ fn verifie(actions: &[Action]) -> Result<()> {
 fn verifie_une(act: &Action, numero: usize) -> Result<()> {
     match act.kind {
         TypeAction::Log => {
-            if act.timeout.is_some() || act.url.is_some() || act.command.is_some() {
+            if act.timeout.is_some()
+                || act.url.is_some()
+                || act.command.is_some()
+                || act.local.is_some()
+            {
                 return Err(Error::new(format!(
                     "action {numero} : champ interdit pour log"
                 )));
@@ -106,7 +112,7 @@ fn verifie_une(act: &Action, numero: usize) -> Result<()> {
                     "action {numero} : command doit etre absolu"
                 )));
             }
-            if act.url.is_some() {
+            if act.url.is_some() || act.local.is_some() {
                 return Err(Error::new(format!(
                     "action {numero} : url interdite pour exec"
                 )));
@@ -150,6 +156,7 @@ mod tests {
             command: None,
             message: None,
             niveau_log: None,
+            local: None,
         };
         assert!(verifie_une(&act, 1).is_ok());
         let act_https = Action {
@@ -175,6 +182,7 @@ mod tests {
                 command: None,
                 message: None,
                 niveau_log: None,
+                local: None,
             };
             let e = verifie_une(&act, 1).expect_err(url);
             assert!(e.to_string().contains("url invalide"), "{e}");
@@ -186,6 +194,7 @@ mod tests {
             command: None,
             message: Some("sans url".to_string()),
             niveau_log: None,
+            local: None,
         };
         let e = verifie_une(&act, 1).expect_err("requise");
         assert!(e.to_string().contains("url requise"));

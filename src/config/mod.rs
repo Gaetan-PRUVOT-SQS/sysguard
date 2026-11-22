@@ -105,6 +105,7 @@ pub struct Action {
     pub command: Option<String>,
     pub message: Option<String>,
     pub niveau_log: Option<Level>,
+    pub local: Option<bool>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -174,6 +175,14 @@ pub(crate) fn scalaire<'a>(noeud: &'a Node, cle: &str) -> Result<&'a str> {
     match noeud {
         Node::Scalar(s) => Ok(s),
         _ => Err(Error::new(format!("{cle} : valeur scalaire attendue"))),
+    }
+}
+
+pub(crate) fn booleen(cle: &str, valeur: &str) -> Result<bool> {
+    match valeur {
+        "oui" | "vrai" | "true" => Ok(true),
+        "non" | "faux" | "false" => Ok(false),
+        _ => Err(Error::new(format!("{cle} doit etre oui ou non : {valeur}"))),
     }
 }
 

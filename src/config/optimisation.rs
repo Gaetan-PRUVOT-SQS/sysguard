@@ -2,7 +2,7 @@ use crate::error::{Error, Result};
 use crate::yaml::Node;
 
 use super::actions;
-use super::{Action, scalaire};
+use super::{Action, booleen, scalaire};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ZswapMode {
@@ -105,14 +105,6 @@ fn duree_stricte(cle: &str, valeur: &str) -> Result<i64> {
         Ok(d) if d > 0 => Ok(d),
         Ok(_) => Err(Error::new(format!("{cle} doit etre strictement positif"))),
         Err(_) => Err(Error::new(format!("{cle} : duree invalide : {valeur}"))),
-    }
-}
-
-fn booleen(cle: &str, valeur: &str) -> Result<bool> {
-    match valeur {
-        "oui" | "vrai" | "true" => Ok(true),
-        "non" | "faux" | "false" => Ok(false),
-        _ => Err(Error::new(format!("{cle} doit etre oui ou non : {valeur}"))),
     }
 }
 
