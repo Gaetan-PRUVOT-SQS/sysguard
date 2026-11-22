@@ -466,6 +466,19 @@ superviseur (utilisateur sysguard, sans CAP_DAC_OVERRIDE) ne pouvait
 plus traverser le dossier → « fichier illisible », crash au démarrage.
 La règle DAC connue sur les fichiers s'étend au dossier d'exploitation :
 `/etc/sysguard` doit appartenir à root:sysguard (750). Correctif posé et
-relance verte ; la règle est à porter dans l'installateur (`installer.sh`
-fait déjà `chown root:sysguard` sur la config mais laisse le dossier par
-défaut — à harmoniser au prochain tour de distribution).
+relance verte ; harmonisé dans `installer.sh` et le `postinst` du paquet
+(commit b644b7b).
+
+## Compléments de fin de stabilisation — 2026-11-22
+
+- **Licence** : MIT (`LICENSE`), métadonnée `license` dans Cargo.toml,
+  paquet Debian porteur du texte (copyright du deb : MIT), aucune donnée
+  personnelle dans les fichiers publiés.
+- **Doc de référence** : `docs/reference.md` décrit l'état réel de v1.4
+  (CLI, config, règles, actions et durcissements, optimiseurs, unités,
+  dégradé, sécurité, tests) ; `sysguard-specs.md` pointe vers elle.
+- **Matrice distributions** : job `distributions` en containers
+  `debian:13` et `ubuntu:24.04` (prerequis apt + rustup-init téléchargé
+  et exécuté, jamais `curl | sh`) ; tests et lint par distribution.
+  Premier run : `make` et le linker absents des images minimes —
+  `build-essential` ajouté aux prerequis (correctif b1ec12b).
