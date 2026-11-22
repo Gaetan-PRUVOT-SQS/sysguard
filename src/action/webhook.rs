@@ -1,5 +1,5 @@
 use std::io::{Read, Write};
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpStream, ToSocketAddrs};
+use std::net::{IpAddr, SocketAddr, TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
 use crate::action::{ActionCours, ContexteAction, template_applique, variables};
@@ -297,7 +297,13 @@ mod tests {
             let ip: IpAddr = ip.parse().expect("ip");
             assert!(interne(&ip), "{ip} doit etre interne");
         }
-        for ip in ["8.8.8.8", "1.1.1.1", "100.128.0.1", "172.32.0.1", "2606:4700::1111"] {
+        for ip in [
+            "8.8.8.8",
+            "1.1.1.1",
+            "100.128.0.1",
+            "172.32.0.1",
+            "2606:4700::1111",
+        ] {
             let ip: IpAddr = ip.parse().expect("ip");
             assert!(!interne(&ip), "{ip} doit etre publique");
         }
@@ -382,10 +388,7 @@ mod tests {
         };
         let cfg = Config::default();
         let e = envoit(&ac, &cfg, &ctx).expect_err("interne refusee");
-        assert!(
-            e.to_string().contains("destination interne refusee"),
-            "{e}"
-        );
+        assert!(e.to_string().contains("destination interne refusee"), "{e}");
     }
 
     #[test]
@@ -404,10 +407,7 @@ mod tests {
         };
         let cfg = Config::default();
         let e = envoit(&ac, &cfg, &ctx).expect_err("rien n'ecoute sur le port 1");
-        assert!(
-            e.to_string().contains("connexion impossible"),
-            "{e}"
-        );
+        assert!(e.to_string().contains("connexion impossible"), "{e}");
     }
 
     struct ReglePret {

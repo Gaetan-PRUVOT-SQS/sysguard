@@ -40,6 +40,7 @@ fn act_log(message: Option<&str>, niveau: Option<Level>) -> Action {
         command: None,
         message: message.map(str::to_string),
         niveau_log: niveau,
+        local: None,
     }
 }
 
@@ -171,7 +172,10 @@ fn action_webhook(url: &str, message: Option<&str>, timeout: i64) -> (Action, Re
 }
 
 fn webhook_vers_port(port: u16, message: Option<&str>) -> (Action, Regle) {
-    action_webhook(&format!("http://127.0.0.1:{port}/hook"), message, 2000)
+    let mut pair = action_webhook(&format!("http://127.0.0.1:{port}/hook"), message, 2000);
+    // loopback de test : le refus SSRF par defaut ne s'applique pas
+    pair.0.local = Some(true);
+    pair
 }
 
 #[test]
