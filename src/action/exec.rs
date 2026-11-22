@@ -121,8 +121,7 @@ mod tests {
             .expect("spawn");
         let resultat = attendre(&mut enfant, 400);
         assert!(resultat.is_err(), "delai depasse attendu");
-        let pid_descendance =
-            std::fs::read_to_string(&trace).expect("pid de descendance ecrit");
+        let pid_descendance = std::fs::read_to_string(&trace).expect("pid de descendance ecrit");
         let pid: u32 = pid_descendance.trim().parse().expect("pid numerique");
         let mut mort = false;
         for _ in 0..15 {
@@ -132,9 +131,6 @@ mod tests {
             }
             thread::sleep(Duration::from_millis(100));
         }
-        assert!(
-            mort,
-            "la descendance {pid} doit etre morte avec le groupe"
-        );
+        assert!(mort, "la descendance {pid} doit etre morte avec le groupe");
     }
 }
