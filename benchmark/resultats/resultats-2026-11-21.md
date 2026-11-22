@@ -73,7 +73,7 @@ pendant 5s : 100% » puis 99.95%)
 - vmstat et sar (collecte seule, sans règles ni actions) restent les plus
   légers en CPU : 8 et 11 ms. SysGuard en fait 2 à 3 fois plus mais
   couvre règles, cooldown, actions avec timeout et intégration systemd.
-- Contre SysGuard Go du 20/11 (32 ms, 16,7 Mo cgroup, RSS 15,1 Mo,
+- Contre la version SysGuard du 20/11 (32 ms, 16,7 Mo cgroup, RSS 15,1 Mo,
   latence 15 s) : CPU -34 %, mémoire cgroup -97 %, RSS -84 %, latence
   -15 à -40 %.
 - Anecdote de mise au point : le premier essai de latence était nul —

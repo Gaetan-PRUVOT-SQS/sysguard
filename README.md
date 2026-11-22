@@ -77,7 +77,7 @@ has been true for at least `for` and does not fire more often than its
 ### Variables in actions
 
 `{{.RuleName}}`, `{{.Severity}}`, `{{.Value}}`, `{{.Threshold}}`,
-`{{.Hostname}}`, `{{.Timestamp}}` (Go template syntax). The webhook posts
+`{{.Hostname}}`, `{{.Timestamp}}` (template syntax). The webhook posts
 a JSON payload with those fields; validation accepts an http(s) URL,
 sending only supports `http://` (TLS in a future milestone). The `exec`
 action also receives `SG_RULE_NAME`, `SG_SEVERITY`, `SG_VALUE`,

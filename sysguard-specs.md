@@ -2,10 +2,10 @@
 
 **Version** : 0.1 (draft)  
 **Date** : 20 novembre 2026  
-**Statut** : HISTORIQUE — spécification initiale du prototype Go. La
-version courante du produit est celle de `Cargo.toml` ; les éléments Go
-non portés (endpoint status, notifications desktop, export Prometheus)
-restent en roadmap (§10).  
+**Statut** : HISTORIQUE — spécification initiale du projet. La version
+courante du produit est celle de `Cargo.toml` ; les éléments non livrés
+(endpoint status, notifications desktop, export Prometheus) restent en
+roadmap (§10).  
 
 ---
 
@@ -223,15 +223,15 @@ WantedBy=multi-user.target
 
 ---
 
-## 9. Stack technique recommandée
+## 9. Stack technique retenue
 
-| Composant       | Recommandation     | Alternative |
-|-----------------|--------------------|-------------|
-| Langage         | **Go**             | Rust        |
-| Config          | `yaml.v3` + validation | - |
-| Logging         | `log/slog`         | zerolog     |
-| Systemd         | `go-systemd` (notify) | - |
-| HTTP client     | `net/http` standard | - |
+| Composant       | Retenu                       |
+|-----------------|------------------------------|
+| Langage         | **Rust** (édition 2024)      |
+| Config          | parseur YAML strict maison + validation |
+| Logging         | journal JSON structuré       |
+| Systemd         | sd_notify maison (notify + watchdog) |
+| HTTP client     | client HTTP/1.1 maison       |
 
 ---
 

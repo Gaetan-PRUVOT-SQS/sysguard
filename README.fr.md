@@ -78,7 +78,7 @@ condition redevient fausse.
 ### Variables dans les actions
 
 `{{.RuleName}}`, `{{.Severity}}`, `{{.Value}}`, `{{.Threshold}}`,
-`{{.Hostname}}`, `{{.Timestamp}}` (syntaxe template Go). Le webhook envoie
+`{{.Hostname}}`, `{{.Timestamp}}` (syntaxe de template). Le webhook envoie
 un JSON avec ces champs ; la validation accepte une URL http(s), l'envoi
 ne supporte que `http://` (TLS en tranche future). L'action `exec` reçoit
 aussi `SG_RULE_NAME`, `SG_SEVERITY`, `SG_VALUE`, `SG_THRESHOLD`,

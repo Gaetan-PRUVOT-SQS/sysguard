@@ -40,7 +40,7 @@ seule, pas de /dev/kvm).
 
 ## Verdict
 
-Go pour le déploiement superviseur sur le VPS (actif, durci, surveillé).
+Déploiement superviseur validé sur le VPS (actif, durci, surveillé).
 L'optimiseur reste en repli jusqu'à `psi=1` + reboot (prérequis
 documenté). Risque résiduel : la branche hot_add du provisionnement n'est
 pas exercée sur ce VPS (swap disque présent → arbitrage refuse, attendu).

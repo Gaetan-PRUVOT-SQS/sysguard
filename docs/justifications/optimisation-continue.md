@@ -108,7 +108,7 @@ de /proc/pressure et /proc/swaps, scénario de charge mémoire reproduit.
 - stress-ng 0.19 : `--vm-method write-zero` n'existe pas (zero-one) —
   deux essais de validation perdus à cause d'une sortie jetée ; les
   suivants montrent la charge réellement appliquée (MemAvailable
-  5,4 → 1,9 Go, PSI some 47,6 %).
+  5,4 → 1,9 Gio, PSI some 47,6 %).
 
 ## Mesure d'acceptation (cycle complet en VM, psi=1)
 

@@ -1,14 +1,11 @@
 # État de SysGuard
 
-## v0.1 — 2026-11-20
+## Phase initiale (v0.1) — 2026-11-20
 
-Livré : daemon complet (collecte CPU/mémoire/swap/load/disque, règles à durée
-et cooldown, actions log/webhook/exec, YAML strict, SIGHUP, systemd notify +
-watchdog conditionné), unit durcie, CLI run/check/dry-run/version (--once),
-Makefile, configs d'exemple, README, justification, scripts VM.
-
-Tests : 7 paquets verts, 93,7 % d'instructions (l'outil Go ne mesure ni
-branches ni issues de conditions). Vet propre, gofmt propre.
+Premier daemon complet livré : collecte CPU/mémoire/swap/load/disque,
+règles à durée et cooldown, actions log/webhook/exec, YAML strict, SIGHUP,
+systemd notify + watchdog conditionné, unit durcie, CLI run/check/dry-run/
+version (--once), configs d'exemple, scripts VM.
 
 ### Validation en VM (Debian 13 genericcloud, KVM, 4 vCPU, 6 144 Mo, disque 20 G)
 
@@ -17,17 +14,14 @@ branches ni issues de conditions). Vet propre, gofmt propre.
 | Mémoire < 30 Mo | 13,8 Mo RSS | `ps -o rss` (14 088 Ko) |
 | CPU < 1 % au repos | 0 tick sur 10 s (0 %) | delta utime+stime sur /proc/pid/stat |
 | Démarrage < 2 s | 4 ms restart → active | boucle `is-active`, Type=notify (attend READY=1) |
-| Config validée, messages clairs | check/version/dry-run dans la VM, refus explicites (tests + VM) | sortie CLI |
+| Config validée, messages clairs | check/version/dry-run dans la VM, refus explicites | sortie CLI |
 | Watchdog | actif au-delà de WatchdogSec=60 sans kill, ping conditionné à la collecte | uptime monotonic > 60 s |
 | Déclenchement réel | vm-mem : log + exec + webhook JSON reçu sur l'hôte | journalctl + vm/build/webhook-recus.log |
 | SIGHUP | « configuration rechargée » puis nouvelle règle déclenchée au tick suivant | journalctl 17:54:24-29 |
 | Durcissement | exposition systemd-analyze 1,9/10, UMask 0077 | systemd-analyze security |
 
-Anecdotes de mise au point (corrigées, tests de régression en place pour la
-seconde) : `GOMEMLIMIT=32Mi` refusé par le runtime Go (syntaxe `MiB`),
-`--config` nu traité comme commande inconnue (les options nues impliquent
-`run`, conformément à la spec §5), seed cloud-init rejetée (fichier
-`user-data` doit porter ce nom exact sur l'ISO).
+Note VM : la seed cloud-init est rejetée si le fichier ne porte pas le nom
+exact `user-data` sur l'ISO.
 
 Relancer la VM : `vm/lancer-vm.sh` (prépare disque 20G + seed si besoin),
 déployer : `make construire && vm/deploie.sh`. Récepteur webhook de test :
@@ -53,8 +47,9 @@ Lecture :
 - Le CPU au repos de SysGuard est négligeable (0,027 %) et **7 fois plus bas
   que le script natif** (0,195 %), qui paye un fork/exec awk + date par tick.
   sar et vmstat, collecteurs C sans règles, restent les plus légers en CPU.
-- La RAM de SysGuard (14,7 Mo RSS, ~19 Mo pic cgroup) est le plancher du
-  runtime Go : 30 à 40 fois plus que les candidats natifs (0,4-1,8 Mo).
+- La RAM de SysGuard mesurée ce jour (14,7 Mo RSS, ~19 Mo pic cgroup) est
+  le plancher du prototype initial : 30 à 40 fois plus que les candidats
+  natifs (0,4-1,8 Mo).
   Dans un homelab, les deux ordres de grandeur restent anecdotiques devant un
   Prometheus (~centaines de Mo) ou netdata.
 - Latence de détection 12 s contre 15 s : la même sémantique (tick 5 s +
@@ -64,59 +59,28 @@ Lecture :
   webhook/exec avec timeout, config validée strictement, sd_notify + watchdog
   conditionné, unit durcie (exposition 1,9/10), tests et couverture.
 
-## Réécriture C (v1) — démarrée le 2026-11-21
+## Réécriture intermédiaire (v1) — 2026-11-21
 
 Objectif : 30 % mieux que les équivalents natifs sur CPU, mémoire et
-latence. Décision de l'exploitant : réécriture complète en C, le plancher RSS
-du runtime Go (~14 Mo) rendant l'objectif mémoire inaccessible autrement.
-Justification complète : docs/justifications/rewrite-c.md.
+latence (cibles, protocole du benchmark du 20/11 : CPU ≤ 5,6 ms, RSS
+< 1,19 Mo, cgroup < 283 Ko, latence < 8,4 s à tick 2 s). Phase arrêtée en
+cours de tests quand le pivot Rust a été demandé ; ses choix (plancher
+mémoire visé, durcissement release, norme de codage stricte, horloge
+injectée) ont nourri le portage Rust.
 
-Critères de fin (T8, protocole du benchmark du 20/11, même VM) :
+### Reste (roadmap)
 
-| Axe | Natif mesuré | Cible C (30 % mieux) |
-|---|---|---|
-| CPU / fenêtre 120 s | vmstat 8 ms | ≤ 5,6 ms |
-| RSS | script natif 1,7 Mo | < 1,19 Mo |
-| Mémoire cgroup | vmstat 404 Ko | < 283 Ko |
-| Latence détection | script 12 s | < 8,4 s (tick 2 s) |
-
-Plan : T1 socle (fait), T2 config YAML, T3 collecte, T4 moteur de règles,
-T5 actions, T6 daemon/systemd, T7 packaging + VM, T8 benchmark final.
-Le Go v0.1 reste dans le projet comme oracle de différentiel jusqu'à T7.
-
-### T1 — socle (fait le 2026-11-21)
-
-Code dans src/ avec son Makefile : gcc -std=c17 -D_POSIX_C_SOURCE=202405L
--Wall -Wextra -Werror, durcissement release (FORTIFY 3, PIE, relro, CET),
-norminette 42 (INVALID_HEADER accepté sans bandeau, filtré dans make
-norminette). Arène mémoire à propriété écrite et échecs testés, journal
-JSON vers stdout (format slog : time/level/msg), CLI sysguard_main
-(version/help, codes 0/1/2 alignés sur le Go), harnais de tests maison
-dans src/tests/.
-
-Preuves du 2026-11-21 : make test racine → 7 paquets Go ok + 47 cas C
-0 KO (ASan + UBSan) ; make valgrind → 0 erreur ; couverture lignes
-97,3 %, branches 93,9 % (seuils 90 en --fail-under) ; make norminette OK ;
-binaire : version → « sysguard 1.0.0 » (0), sans arg → 1, inconnue → 2.
-
-Anecdote corrigée avec sa régression : alignement de arena_alloc calculé
-sur l'offset et non l'adresse (KO à -O0 seulement) ; correction par
-alignement depuis l'adresse de base, cas de couverture -O0 en place.
-
-### Reste (v0.2)
-
-- Hystérésis de retour, conditions multiples (AND), métriques réseau/proc/temp
+- Conditions multiples (AND), métriques réseau/proc/temp
 - Endpoint de status, historique des déclenchements
 - Type=notify-reload (systemd ≥ 253) à évaluer
-- Export Prometheus, cgroups (v0.3)
+- Export Prometheus, cgroups
 
 ## Portage Rust intégral (v1.1) — 2026-11-21
 
 Demande du jour : « on le passe intégralement en rust ». La crate Rust à la
 racine (édition 2024, `Cargo.toml` + `src/`) devient la ligne principale et
-remplace les deux lignes. Les sources Go (`internal/`, `cmd/`) restent
-comme oracle de différentiel, les sources C du socle interrompu sont
-archivées dans `heritage/c` (rien n'est supprimé). Justification :
+remplace les implémentations antérieures (retirées du dépôt plus tard dans
+la journée, cf. section dédiée). Justification :
 docs/justifications/rewrite-rust.md.
 
 Livré : parseur YAML strict, config complète (36 refus documentés portés
@@ -124,38 +88,36 @@ avec leurs messages), collecte /proc + statfs (FFI libc, seul unsafe),
 moteur for/cooldown fidèle, actions log/dry-run/exec/webhook, daemon
 (signaux par drapeaux + sommeil complet de l'intervalle), sd_notify +
 watchdog conditionné, CLI complète (les options seules impliquent `run`,
-conformément à la spec §5), Makefile racine cargo, README mis à jour,
-`scripts/differentiel.sh` contre l'oracle Go.
+conformément à la spec §5), Makefile racine cargo, README mis à jour.
 
 Preuves fraîches du 2026-11-21 :
 
 - `make test` : 136 cas verts ; `make lint` (clippy deny) et `cargo fmt
   --check` propres ; `make couverture` : lignes 97,2 %, régions 95,2 %
   (seuils 90 % en --fail-under) ; `make audit` : 0 advisory (7 crates).
-- `make test-oracle` : tests Go + différentiel 47 cas alignés (2 écarts
-  assumés du durcissement C vérifiés à part : url sur exec, command sur
-  log, refusées ici, tolérées par le Go).
-- Validation VM Debian 13 : service actif, RSS 2 148 Ko contre 13,8 Mo en
-  Go, webhook JSON templated reçu sur l'hôte, SIGHUP « configuration
+- Validation VM Debian 13 : service actif, RSS 2 148 Ko contre 13,8 Mo
+  avant portage, webhook JSON templated reçu sur l'hôte, SIGHUP « configuration
   rechargée » puis nouvelle règle déclenchée au tick suivant, retour
   config d'origine au second HUP, uptime > 60 s sans kill watchdog,
   exposition systemd-analyze 1,9/10, démarrage Type=notify < 2 s.
 - Benchmark (protocole du 20/11, tick 2 s, fenêtre 127 s ramenée à 120 s) :
-  CPU cgroup 26 ms (0,022 %) contre 32 ms en Go ; RSS 2 288 Ko contre
+  CPU cgroup 26 ms (0,022 %) contre 32 ms avant portage ; RSS 2 288 Ko contre
   14,7 Mo ; mémoire cgroup 480 Ko contre 16,3 Mo ; latence de détection à
-  4 vCPU saturés 7,0 s contre 15 s (Go) et 12 s (script natif).
+  4 vCPU saturés 7,0 s contre 15 s avant portage et 12 s (script natif).
 
 Anecdotes corrigées avec leurs régressions pendant le portage :
 
-- webhook : le C n'appliquait pas le template au message (`{{.Value}}`
-  littéral reçu sur l'hôte) ; corrigé au comportement Go, test en place.
-- options seules sans commande : le C exigeait une commande explicite,
+- webhook : l'implémentation intermédiaire n'appliquait pas le template au
+  message (`{{.Value}}` littéral reçu sur l'hôte) ; corrigé au comportement
+  de la spec, test en place.
+- options seules sans commande : une commande explicite était exigée,
   l'unit systemd échouait au premier déploiement ; corrigé au comportement
-  spec §5 et Go (`run` implicite), test en place.
-- CPU : la garde `dIdle <= 0` du C rapportait 0 % sous saturation pleine
+  de la spec §5 (`run` implicite), test en place.
+- CPU : la garde `dIdle <= 0` rapportait 0 % sous saturation pleine
   (delta idle exactement 0) et la règle `cpu > 50 %` ne pouvait pas tirer ;
-  corrigé à la formule Go, fixture `stat-sature` en place. Repéré par la
-  mesure de latence, jamais par les tests unitaires du C.
+  corrigé par la formule standard (delta non-idle / delta total), fixture
+  `stat-sature` en place. Repéré par la mesure de latence, jamais par les
+  tests unitaires.
 - CPU au repos : la première version attendait l'intervalle par tranches
   de 50 ms (réactivité signal) ; 2 500 réveils coûtaient 165 ms CPU par
   fenêtre. Remplacé par un sommeil complet de l'intervalle + drapeaux
@@ -172,24 +134,23 @@ dans `.cyber-ignore` ; exclusion par chemin de `vm/build/` posée dans
 (faux secret détecté puis retiré). Rescan depuis un cwd étranger :
 no leaks found.
 
-Critères du C (T8, -30 % vs natifs) : latence tenue (7,0 s < 8,4 s),
+Critères initiaux (-30 % vs natifs) : latence tenue (7,0 s < 8,4 s),
 mémoire et CPU absolus non tenus en Rust (plancher du runtime et coût par
-tick supérieurs au C) : CPU 26 ms vs cible 5,6 ms, RSS 2,29 Mo vs cible
-1,19 Mo, cgroup 480 Ko vs cible 283 Ko. Renégociation explicite avec les
-chiffres : contre le Go livré, le Rust fait -18 % CPU, -84 % RSS, -97 %
-cgroup, -53 % latence, et les critères de la spec §11 passent tous
-(RSS < 30 Mo, CPU < 1 %, démarrage < 2 s). Les sources Go et C restent
-dans le dépôt ; leur retrait reste à décider.
+tick supérieurs aux cibles) : CPU 26 ms vs cible 5,6 ms, RSS 2,29 Mo vs
+cible 1,19 Mo, cgroup 480 Ko vs cible 283 Ko. Renégociation explicite avec
+les chiffres : contre la version du 20/11, le Rust fait -18 % CPU, -84 %
+RSS, -97 % cgroup, -53 % latence, et les critères de la spec §11 passent
+tous (RSS < 30 Mo, CPU < 1 %, démarrage < 2 s). Le retrait des sources
+antérieures est acté plus bas.
 
-## Retrait des sources Go et C — 2026-11-21
+## Retrait des implémentations antérieures — 2026-11-21
 
-Demande de l'exploitant : « plus de traces go et c, le projet a pivoté en rust ».
-Retirés : `internal/`, `cmd/`, `go.mod`, `go.sum`, `heritage/` (C),
-`scripts/differentiel.sh` et la cible `make test-oracle` (l'oracle Go
-n'existe plus). Sauvegarde préalable vérifiée par extraction et diff :
-`~/.local/share/sauvegardes/sysguard-go-c-2026-11-21.tar.gz`. Les docs
-(`docs/`, benchmark) restent comme historique des décisions. `make test`
-et `make construire` relancés verts après retrait.
+Demande de l'exploitant : pivot complet en Rust, plus aucune trace des
+implémentations antérieures dans le dépôt. Retirés : tous les répertoires
+et fichiers sources des deux implémentations précédentes, le script de
+différentiel et sa cible Makefile. Sauvegarde préalable vérifiée par
+extraction et diff (tar.gz sous `~/.local/share/sauvegardes/`).
+`make test` et `make construire` relancés verts après retrait.
 
 ## Benchmark natif contre SysGuard Rust — 2026-11-21
 
@@ -208,8 +169,8 @@ collecte seule. Latence mesurée sur deux essais avec une charge réparée
 
 Lecture : SysGuard Rust coûte 9 fois moins de CPU que le script natif de
 même rôle, mémoire cgroup comparable, RSS supérieure (exécutable plus
-gros), latence du même ordre (phase des ticks). Contre le Go du 20/11 :
-CPU -34 %, cgroup -97 %, RSS -84 %, latence -15 à -40 %. vmstat et sar
+gros), latence du même ordre (phase des ticks). Contre la version du
+20/11 : CPU -34 %, cgroup -97 %, RSS -84 %, latence -15 à -40 %. vmstat et sar
 (collecte seule) restent devant en CPU pur.
 
 ## Optimiseur continu (PSI, zram) — 2026-11-21
@@ -367,8 +328,9 @@ doc : docs/campagne-vps-29119.md. Résultats : déploiement ✓, dégradé
 inversion LRU) avec zones nommées ✓, service superviseur actif + SIGHUP ✓,
 gouverneur refusé par les 8 cœurs → dégradation ✓, PSI figé détecté sous
 charge après I-2 ✓. Prérequis documenté : psi=1 au boot pour l'optimiseur.
-La mémoire machine du VPS a été corrigée (RAM 16,7 Gio, swapfile, compte
-le compte utilisateur non privilégié référencé par sudoers est absent (root seul), stress-ng et systemd-zram-generator installés).
+Corrections d'environnement pendant la campagne : stress-ng et
+systemd-zram-generator installés sur le VPS ; le compte utilisateur non
+privilégié référencé par sudoers est absent (root seul).
 
 Incident I-2 (gravité 2, trouvé par la campagne VPS) : le drapeau
 psi_a_bouge se levait au premier pas au calme (branche Some(_) du match
