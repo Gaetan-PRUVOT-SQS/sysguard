@@ -1,0 +1,7 @@
+rules:
+  - name: a
+    condition:
+      metric: cpu.usage
+      operator: ">"
+      value: 1
+    actions: []

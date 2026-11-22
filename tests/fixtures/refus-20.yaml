@@ -1,0 +1,9 @@
+rules:
+  - name: a
+    condition:
+      metric: cpu.usage
+      patate: 1
+      operator: ">"
+      value: 1
+    actions:
+      - type: log

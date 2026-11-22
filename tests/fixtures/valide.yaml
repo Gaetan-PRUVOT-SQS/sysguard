@@ -1,0 +1,50 @@
+global:
+  # frequence d'evaluation des regles
+  check_interval: 15s
+  # debug, info, warn, error
+  log_level: info
+  # durees par defaut des actions
+  exec_timeout: 10s
+  webhook_timeout: 10s
+
+rules:
+  - name: high-cpu
+    severity: warning
+    condition:
+      metric: cpu.usage
+      operator: ">"
+      value: 90
+    for: 2m
+    cooldown: 10m
+    actions:
+      - type: log
+        # level optionnel, sinon la severite de la regle
+        level: warn
+        message: "CPU eleve depuis 2 minutes : {{.Value}}%"
+
+  - name: disk-full
+    severity: critical
+    condition:
+      metric: disk.usage
+      mount: "/"
+      operator: ">"
+      value: 90
+    for: 1m
+    actions:
+      - type: exec
+        command: /usr/local/bin/cleanup-logs.sh
+        timeout: 30s
+      - type: webhook
+        url: "https://ntfy.sh/mon-topic"
+        message: "Disque plein sur {{.Hostname}} : {{.Value}}%"
+
+  - name: mem-critique
+    severity: critical
+    condition:
+      metric: mem.usage
+      operator: ">"
+      value: 95
+    for: 1m
+    cooldown: 30m
+    actions:
+      - type: log

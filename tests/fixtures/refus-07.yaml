@@ -1,0 +1,9 @@
+rules:
+  - name: a
+    condition:
+      metric: cpu.usage
+      mount: "/"
+      operator: ">"
+      value: 1
+    actions:
+      - type: log

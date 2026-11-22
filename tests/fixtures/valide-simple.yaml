@@ -1,0 +1,8 @@
+rules:
+  - name: simple
+    condition:
+      metric: load.load1
+      operator: "<"
+      value: 1
+    actions:
+      - type: log

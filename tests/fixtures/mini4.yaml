@@ -1,0 +1,7 @@
+global:
+  # frequence d'evaluation des regles
+  check_interval: 15s
+  # debug, info, warn, error
+  log_level: info
+  # durees par defaut des actions
+  exec_timeout: 10s

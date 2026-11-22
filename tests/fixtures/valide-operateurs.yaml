@@ -1,0 +1,29 @@
+global:
+  log_level: debug
+
+rules:
+  - name: op-le
+    condition:
+      metric: mem.available
+      operator: "<="
+      value: 512
+    for: 30s
+    actions:
+      - type: log
+        level: warning
+  - name: op-ge
+    condition:
+      metric: disk.free
+      mount: "/var"
+      operator: ">="
+      value: 1073741824
+    actions:
+      - type: log
+  - name: op-eq
+    condition:
+      metric: swap.usage
+      operator: "=="
+      value: 0
+    actions:
+      - type: log
+      - type: log

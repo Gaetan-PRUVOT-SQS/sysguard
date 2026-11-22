@@ -1,0 +1,9 @@
+rules:
+  - name: a
+    condition:
+      metric:
+        sous: 1
+      operator: ">"
+      value: 1
+    actions:
+      - type: log

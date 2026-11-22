@@ -1,0 +1,4 @@
+global:
+  x: 1
+  # commentaire
+  check_interval: 15s

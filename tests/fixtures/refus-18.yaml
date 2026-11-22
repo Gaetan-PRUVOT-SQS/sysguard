@@ -1,0 +1,9 @@
+rules:
+  - name: a
+    for: -1s
+    condition:
+      metric: cpu.usage
+      operator: ">"
+      value: 1
+    actions:
+      - type: log
