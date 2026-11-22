@@ -2,6 +2,7 @@ pub mod collect;
 pub mod config;
 pub mod duration;
 pub mod error;
+pub mod eval;
 pub mod file;
 pub mod log;
 pub mod sys;
