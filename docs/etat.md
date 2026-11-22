@@ -383,3 +383,15 @@ installer réexécutée dans l'ordre.
 
 `make test` : 203 cas verts (177 unitaires + 26 intégration) ; couverture
 94,4/93,5 ; clippy deny, fmt propres ; audit 0 advisory.
+
+## Dépôt git initialisé — 2026-11-22
+
+`git init` (branche main, identité locale Gaetan Pruvot) après le
+développement : l'historique est une **reconstruction par phases** — 13
+commits regroupant les fichiers par phase réelle (socle, YAML, config,
+collecte, évaluation, actions, daemon/CLI, optimiseur mémoire, CPU, tests
+réels, docs/packaging/VM). Les états intermédiaires ne compilent pas tous
+(l'état final du HEAD est la référence) ; la construction a révélé et
+réparé un lib.rs tronqué par le script d'import. Marqueur
+`.mode-side-project` exclu via .git/info/exclude. Aucun remote : push sur
+demande explicite.
