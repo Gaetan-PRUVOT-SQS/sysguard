@@ -442,3 +442,30 @@ docs/justifications/stabilisation.md :
 `make campagne` : 212 cas verts (186 unitaires + 26 intégration et
 réels), code de sortie 0 ; couverture lignes 94,57 / régions 93,85 ;
 clippy deny, fmt propres ; audit 0.
+
+### P0 VPS réel : sysguard-opt dans le sandbox systemd (2026-11-22)
+
+Déploiement de l'unité opt sur le VPS (binaire 1.4.0 à jour, empreinte
+sha256 vérifiée locale/distance avant install, stop superviseur avant
+remplacement). Preuves dans le sandbox systemd réel :
+
+- capacités : CapBnd = CapPrm = CapEff = 0x210000 → cap_sys_module,
+  cap_sys_admin, rien d'autre (profondeur du bounding set exacte) ;
+- arbitrage : avec `zram_provisionner: oui` posé exprès, « swap deja
+  present (/swapfile (disque)), provisionnement zram non applique (swap
+  disque + zram = inversion LRU) », swap du VPS intact ; config remise à
+  `non` ensuite ;
+- SIGHUP superviseur : « configuration rechargée » (la config partagée
+  a gagné la section `optimisation`, inerte pour le superviseur) ;
+- exposition 1,9 (superviseur) / 3,1 (opt), watchdog actif, les deux
+  unités enabled + active.
+
+**Incident I-6 (gravité 2, corrigé pendant le déploiement)** :
+`install -d -m 750 /etc/sysguard` a posé le dossier root:root — le
+superviseur (utilisateur sysguard, sans CAP_DAC_OVERRIDE) ne pouvait
+plus traverser le dossier → « fichier illisible », crash au démarrage.
+La règle DAC connue sur les fichiers s'étend au dossier d'exploitation :
+`/etc/sysguard` doit appartenir à root:sysguard (750). Correctif posé et
+relance verte ; la règle est à porter dans l'installateur (`installer.sh`
+fait déjà `chown root:sysguard` sur la config mais laisse le dossier par
+défaut — à harmoniser au prochain tour de distribution).

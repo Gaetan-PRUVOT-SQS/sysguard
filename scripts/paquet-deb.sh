@@ -56,6 +56,10 @@ cat >"$STAGE/DEBIAN/postinst" <<AFTER_INSTALL
 #!/bin/sh
 set -eu
 id -u sysguard >/dev/null 2>&1 || useradd -r -s /usr/sbin/nologin sysguard
+# le dossier ET la config appartiennent au groupe du service (règle DAC
+# des démons à capacités bornées, cf. docs/etat.md I-6)
+chown root:sysguard /etc/sysguard /etc/sysguard/sysguard.yaml 2>/dev/null || true
+chmod 750 /etc/sysguard 2>/dev/null || true
 systemctl daemon-reload
 AFTER_INSTALL
 

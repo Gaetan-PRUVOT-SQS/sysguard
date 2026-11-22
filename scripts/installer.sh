@@ -46,7 +46,10 @@ mkdir -p /etc/sysguard
 [ -f /etc/sysguard/sysguard.yaml ] ||
 	install -m 640 "$DOSSIER/sysguard.yaml.example" /etc/sysguard/sysguard.yaml
 id -u sysguard >/dev/null 2>&1 || useradd -r -s /usr/sbin/nologin sysguard
-chown root:sysguard /etc/sysguard/sysguard.yaml 2>/dev/null || true
+# le dossier ET la config appartiennent au groupe du service : un démon à
+# capacités bornées reste soumis aux permissions DAC (voir docs/etat.md I-6)
+chown root:sysguard /etc/sysguard /etc/sysguard/sysguard.yaml 2>/dev/null || true
+chmod 750 /etc/sysguard 2>/dev/null || true
 
 systemctl daemon-reload
 if [ "$ACTIVER" = oui ]; then
