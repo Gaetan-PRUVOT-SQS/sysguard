@@ -35,7 +35,9 @@ rules:
         command: /usr/local/bin/cleanup-logs.sh
         timeout: 30s
       - type: webhook
-        url: "https://ntfy.sh/mon-topic"
+        # envoi http:// seul (TLS tranche future) ; local: oui si la cible
+        # est interne (loopback/privee refusee par defaut : anti SSRF)
+        url: "http://ntfy.sh/mon-topic"
         message: "Disque plein sur {{.Hostname}} : {{.Value}}%"
 
   - name: mem-critique

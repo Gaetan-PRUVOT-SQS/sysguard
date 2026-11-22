@@ -37,6 +37,17 @@ stack Prometheus + Alertmanager.
 
 ## Installation
 
+Depuis une release (Debian/Ubuntu amd64) :
+
+```sh
+sudo dpkg -i sysguard_1.4.0-1_amd64.deb     # unités, exemple de config, compte sysguard
+# ou depuis l'archive tar.gz :
+sudo scripts/installer.sh sysguard-1.4.0-linux-amd64.tar.gz [--activer]
+sudo scripts/desinstaller.sh [--purge]      # retrait propre
+```
+
+Depuis les sources :
+
 ```sh
 make construire            # binaire dans build/sysguard
 sudo install -m 755 build/sysguard /usr/local/bin/sysguard
@@ -82,7 +93,10 @@ condition redevient fausse.
 `{{.RuleName}}`, `{{.Severity}}`, `{{.Value}}`, `{{.Threshold}}`,
 `{{.Hostname}}`, `{{.Timestamp}}` (syntaxe de template). Le webhook envoie
 un JSON avec ces champs ; la validation accepte une URL http(s), l'envoi
-ne supporte que `http://` (TLS en tranche future). L'action `exec` reçoit
+ne supporte que `http://` (TLS en tranche future). Les destinations
+internes (loopback, privées, lien local, métadonnées cloud) sont refusées
+par défaut contre le SSRF ; poser `local: oui` sur l'action webhook pour
+les autoriser (homelab, tests). L'action `exec` reçoit
 aussi `SG_RULE_NAME`, `SG_SEVERITY`, `SG_VALUE`, `SG_THRESHOLD`,
 `SG_HOSTNAME`, `SG_TIMESTAMP`, et la commande est découpée sans shell (pas
 de pipe ni de `&&`).

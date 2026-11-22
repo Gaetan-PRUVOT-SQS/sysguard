@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  publier:
+    name: Publication d'une release (tar.gz + paquet Debian)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+      - uses: Swatinem/rust-cache@2201cc584a476d1b508be977bbe4b7d1c7a52e9c # v2.9.3
+      - uses: taiki-e/install-action@fe3acb53a98b62c772db35de75ce0e4595e7ca8c # v2
+        with:
+          tool: cargo-llvm-cov,cargo-audit
+
+      - name: Campagne complete
+        run: make campagne
+
+      - name: Paquets
+        env:
+          MAINTENEUR: ${{ vars.DEB_MAINTAINER || 'SysGuard project' }}
+        run: |
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)
+          mkdir -p build/tar/sysguard-"$VERSION"
+          cp build/sysguard \
+             packaging/sysguard.service \
+             packaging/sysguard-opt.service \
+             configs/sysguard.yaml.example \
+             README.md \
+             README.fr.md \
+             build/tar/sysguard-"$VERSION"/
+          tar -C build/tar -czf "build/sysguard-${VERSION}-linux-amd64.tar.gz" "sysguard-$VERSION"
+          scripts/paquet-deb.sh
+
+      - name: Publier la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)
+          gh release create "${{ github.ref_name }}" \
+            "build/sysguard-${VERSION}-linux-amd64.tar.gz#SysGuard ${VERSION} linux-amd64 (tar.gz)" \
+            "build/sysguard_${VERSION}-1_amd64.deb#SysGuard ${VERSION} Debian/Ubuntu amd64" \
+            --title "SysGuard ${VERSION}" \
+            --notes "Campagne complete verte (fmt, clippy, tests, couverture >= 90 %, audit 0 advisory). Voir README.md pour l'installation (scripts/installer.sh ou paquet .deb)."

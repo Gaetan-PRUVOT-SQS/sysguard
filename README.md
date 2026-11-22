@@ -37,6 +37,17 @@ Written in Rust, no framework: only two dependencies (`libc` and
 
 ## Installation
 
+From a release (Debian/Ubuntu amd64):
+
+```sh
+sudo dpkg -i sysguard_1.4.0-1_amd64.deb     # units, example config, sysguard user
+# or from the tar.gz:
+sudo scripts/installer.sh sysguard-1.4.0-linux-amd64.tar.gz [--activer]
+sudo scripts/desinstaller.sh [--purge]      # clean removal
+```
+
+From source:
+
 ```sh
 make construire            # binary in build/sysguard
 sudo install -m 755 build/sysguard /usr/local/bin/sysguard
@@ -81,7 +92,10 @@ has been true for at least `for` and does not fire more often than its
 `{{.RuleName}}`, `{{.Severity}}`, `{{.Value}}`, `{{.Threshold}}`,
 `{{.Hostname}}`, `{{.Timestamp}}` (template syntax). The webhook posts
 a JSON payload with those fields; validation accepts an http(s) URL,
-sending only supports `http://` (TLS in a future milestone). The `exec`
+sending only supports `http://` (TLS in a future milestone). Internal
+destinations (loopback, private, link-local, cloud metadata ranges) are
+refused by default to block SSRF; set `local: oui` on the webhook action
+to allow them (homelab, tests). The `exec`
 action also receives `SG_RULE_NAME`, `SG_SEVERITY`, `SG_VALUE`,
 `SG_THRESHOLD`, `SG_HOSTNAME`, `SG_TIMESTAMP`, and the command is split
 without a shell (no pipes, no `&&`).
