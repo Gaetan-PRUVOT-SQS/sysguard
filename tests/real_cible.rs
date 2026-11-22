@@ -13,7 +13,15 @@ fn lectures_reelles_proc() {
     let load = cible.lit_load1().expect("loadavg lisible");
     assert!(load >= 0.0);
     assert!(cible.ram_octets() > 0, "MemTotal lu");
-    assert!(cible.processus().expect("processus").len() > 10);
+    // portable : un container minimal n'a que quelques processus, le
+    // pid du test lui-même doit toujours y figurer
+    let pid = std::process::id() as i32;
+    let processus = cible.processus().expect("processus");
+    assert!(!processus.is_empty(), "au moins un processus vu");
+    assert!(
+        processus.iter().any(|p| p.pid == pid),
+        "le pid du test figure dans /proc"
+    );
     assert!(cible.zones_swap().is_ok());
     assert!(
         cible.fichier_existe(Path::new("/proc/self/stat")),
