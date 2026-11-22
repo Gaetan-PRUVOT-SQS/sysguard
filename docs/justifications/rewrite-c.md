@@ -5,7 +5,7 @@
 SysGuard v0.1 (Go) est un daemon de supervision (CPU, mémoire, swap, load,
 disques ; règles à durée et cooldown ; actions log/webhook/exec) livré et
 validé en VM le 2026-11-20. Demande du 2026-11-21 : 30 % de performances en
-plus que les équivalents natifs Linux. Gaetan a choisi « tout battre,
+plus que les équivalents natifs Linux. L'exploitant a choisi « tout battre,
 réécriture en C » : CPU et mémoire face à sar et vmstat, latence face au
 script natif.
 
@@ -96,7 +96,7 @@ couverture -O0 verrouille la régression.
 
 - Demande : 2026-11-21, « 30 % de performances en plus que les systèmes
   équivalents natifs Linux » ; choix « tout battre, réécriture en C »
-  posé par Gaetan.
+  posé par l'exploitant.
 - Baseline : benchmark/resultats/resultats-2026-11-20.md, résumé dans
   docs/etat.md.
 - Critères de fin (T8, protocole identique, même VM Debian 13) : CPU

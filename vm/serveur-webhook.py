@@ -3,7 +3,7 @@
 import http.server
 import sys
 
-CHEMIN_LOG = sys.argv[2] if len(sys.argv) > 2 else "/home/gaetan/Bureau/Sysguard/vm/build/webhook-recus.log"
+CHEMIN_LOG = sys.argv[2] if len(sys.argv) > 2 else "webhook-recus.log"
 
 
 class Recepteur(http.server.BaseHTTPRequestHandler):

@@ -1,6 +1,6 @@
 # Campagne système VPS — ISTQB / ISO 29119 — 2026-11-22
 
-Suite système de la campagne du même jour, exécutée sur le **VPS perso
+Suite système de la campagne du même jour, exécutée sur le **VPS réel
 réel** (Ubuntu 26.04.1 LTS, noyau 7.0.0-43-generic, 8 vCPU, 16,7 Gio RAM,
 swapfile 8 Gio priorité -1, systemd 259, glibc 2.43, PSI compteur figé
 — psi absent du cmdline) : environnement radicalement différent de la VM

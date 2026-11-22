@@ -67,7 +67,7 @@ Lecture :
 ## Réécriture C (v1) — démarrée le 2026-11-21
 
 Objectif : 30 % mieux que les équivalents natifs sur CPU, mémoire et
-latence. Décision de Gaetan : réécriture complète en C, le plancher RSS
+latence. Décision de l'exploitant : réécriture complète en C, le plancher RSS
 du runtime Go (~14 Mo) rendant l'objectif mémoire inaccessible autrement.
 Justification complète : docs/justifications/rewrite-c.md.
 
@@ -183,7 +183,7 @@ dans le dépôt ; leur retrait reste à décider.
 
 ## Retrait des sources Go et C — 2026-11-21
 
-Demande de Gaetan : « plus de traces go et c, le projet a pivoté en rust ».
+Demande de l'exploitant : « plus de traces go et c, le projet a pivoté en rust ».
 Retirés : `internal/`, `cmd/`, `go.mod`, `go.sum`, `heritage/` (C),
 `scripts/differentiel.sh` et la cible `make test-oracle` (l'oracle Go
 n'existe plus). Sauvegarde préalable vérifiée par extraction et diff :
@@ -360,7 +360,7 @@ leaks), système validé en VM fraîche. Critères de fin tous tenus.
 
 ## Campagne système VPS réel — 2026-11-22
 
-Même campagne exécutée sur le VPS perso réel (Ubuntu 26.04.1, 16,7 Gio,
+Même campagne exécutée sur le VPS réel (Ubuntu 26.04.1, 16,7 Gio,
 swapfile 8 Gio, cpufreq virtuel lecture seule, PSI compteur figé) —
 doc : docs/campagne-vps-29119.md. Résultats : déploiement ✓, dégradé
 (nobody) ✓, arbitrage refuse le provisionnement zram (swapfile disque,
@@ -368,7 +368,7 @@ inversion LRU) avec zones nommées ✓, service superviseur actif + SIGHUP ✓,
 gouverneur refusé par les 8 cœurs → dégradation ✓, PSI figé détecté sous
 charge après I-2 ✓. Prérequis documenté : psi=1 au boot pour l'optimiseur.
 La mémoire machine du VPS a été corrigée (RAM 16,7 Gio, swapfile, compte
-gaetan absent, stress-ng et systemd-zram-generator installés).
+le compte utilisateur non privilégié référencé par sudoers est absent (root seul), stress-ng et systemd-zram-generator installés).
 
 Incident I-2 (gravité 2, trouvé par la campagne VPS) : le drapeau
 psi_a_bouge se levait au premier pas au calme (branche Some(_) du match
@@ -386,7 +386,7 @@ installer réexécutée dans l'ordre.
 
 ## Dépôt git initialisé — 2026-11-22
 
-`git init` (branche main, identité locale Gaetan Pruvot) après le
+`git init` (branche main, identité locale de l'exploitant) après le
 développement : l'historique est une **reconstruction par phases** — 13
 commits regroupant les fichiers par phase réelle (socle, YAML, config,
 collecte, évaluation, actions, daemon/CLI, optimiseur mémoire, CPU, tests

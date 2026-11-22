@@ -1,12 +1,14 @@
 #!/bin/sh
-# Campagne système SysGuard sur le VPS perso (Ubuntu 26.04, 8,1 Gio, sans swap).
+# Campagne système SysGuard sur un VPS distant.
+# usage : campagne-vps.sh UTILISATEUR@HOTE CHEMIN_CLE — config : /tmp/campagne.yaml
 # Pré-requis : accès SSH opérationnel (clé déverrouillée dans l'agent), binaire
 # build/sysguard à jour, config temporaire posée par l'appelant.
 # usage : scripts/campagne-vps.sh [HOTE] [CLE]
 set -eu
 
-hote=${1:-gaetan@193.168.146.216}
-cle=${2:-/home/gaetan/VPS Perso}
+hote=${1:?usage : campagne-vps.sh UTILISATEUR@HOTE CHEMIN_CLE [CONFIG]}
+cle=${2:?CHEMIN_CLE requis}
+config=${3:-/tmp/campagne.yaml}
 ssh_cmd() {
 	ssh -i "$cle" -o IdentitiesOnly=yes -o StrictHostKeyChecking=no \
 		-o ConnectTimeout=10 "$hote" "$@"
@@ -31,7 +33,7 @@ echo "== V2 déploiement (root, config campagne sans provisionnement) =="
 scp_cmd() {
 	scp -i "$cle" -o IdentitiesOnly=yes -o StrictHostKeyChecking=no "$@"
 }
-scp_cmd build/sysguard "root@${hote#*@}:/usr/local/bin/sysguard" 2>/dev/null ||
+scp_cmd build/sysguard "${hote%%:*}:/usr/local/bin/sysguard" 2>/dev/null ||
 	scp_cmd build/sysguard "$hote:/tmp/sysguard"
 
 echo "== V3 dégradé sans privilèges =="

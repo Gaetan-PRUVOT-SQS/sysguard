@@ -1,15 +1,35 @@
 # SysGuard
 
-Daemon Linux léger de supervision des ressources système avec réaction automatique. Pensé pour les homelabs, petits serveurs et NAS qui n'ont pas besoin d'une stack Prometheus + Alertmanager.
+Daemon Linux léger de supervision des ressources système avec réaction
+automatique et optimiseur intégré (PSI, zram, tuning mémoire et CPU).
+Pensé pour les homelabs, petits serveurs et NAS qui n'ont pas besoin d'une
+stack Prometheus + Alertmanager.
 
-## Fonctionnalités (v0.1)
+Écrit en Rust, sans framework : deux dépendances seulement (`libc` et
+`signal-hook`), un parseur YAML strict maison, un client HTTP/1.1 minimal.
 
-- Collecte CPU (`/proc/stat`), mémoire et swap (`/proc/meminfo`), load (`/proc/loadavg`), disques (`statfs`)
-- Règles à seuil avec durée minimale (`for`) et anti-répétition (`cooldown`)
-- Actions `log`, `webhook` (POST JSON) et `exec` (avec timeout)
-- Configuration YAML validée strictement au démarrage, rechargée à chaud par SIGHUP
-- Intégration systemd : `Type=notify`, watchdog sd_notify (ping conditionné à la réussite de la collecte)
-- CLI : `run`, `optimise` (optimiseur PSI/zram), `check` (validation), `dry-run`, `version`
+## Fonctionnalités
+
+- Collecte CPU (`/proc/stat`), mémoire et swap (`/proc/meminfo`), load
+  (`/proc/loadavg`), disques (`statfs`), pression PSI (`/proc/pressure/*`)
+- Règles à seuil avec durée minimale (`for`) et anti-répétition
+  (`cooldown`)
+- Actions `log`, `webhook` (POST JSON) et `exec` (variables `SG_*`, sans
+  shell, avec timeout)
+- Configuration YAML validée strictement au démarrage, rechargée à chaud
+  par SIGHUP
+- Intégration systemd : `Type=notify`, watchdog sd_notify (ping
+  conditionné à la réussite de la collecte)
+- CLI : `run`, `optimise` (optimiseur), `check` (validation), `dry-run`,
+  `version`
+- **Optimiseur mémoire** : santé zram (ratio de compression réel),
+  arbitrage des doublons (swap disque présent → pas de zram, risque
+  d'inversion LRU), provisionnement complet du swap compressé s'il manque,
+  seuils PSI à hystérésis avec actions configurables
+- **Optimisation CPU** : détection des gestionnaires de fréquence
+  existants (tuned, power-profiles-daemon, auto-cpufreq — jamais de
+  doublon), gouverneur et EPP au socle, affinités admin-déclarées,
+  identification du principal consommateur, démotion opt-in par patterns
 
 ## Installation
 
@@ -24,11 +44,17 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now sysguard
 ```
 
-Prérequis : systemd ≥ 245 (notify + watchdog), un utilisateur `sysguard` dédié, et un fichier de configuration valide.
+Prérequis : systemd ≥ 245 (notify + watchdog), un utilisateur `sysguard`
+dédié et un fichier de configuration valide. Binaire x86-64 dynamique
+(glibc ≥ 2.32).
+
+L'optimiseur utilise la seconde unité `packaging/sysguard-opt.service`
+(`sysguard optimise`) ; sur les images cloud où PSI est désactivé, ajouter
+`psi=1` à la ligne de commande du noyau.
 
 ## Configuration
 
-Format et défauts : voir `configs/sysguard.yaml.example`. Champs de `global` :
+Format et défauts : `configs/sysguard.yaml.example`. Champs de `global` :
 
 | Champ | Défaut | Rôle |
 |---|---|---|
@@ -37,26 +63,57 @@ Format et défauts : voir `configs/sysguard.yaml.example`. Champs de `global` :
 | `exec_timeout` | `10s` | timeout par défaut des actions `exec` |
 | `webhook_timeout` | `10s` | timeout par défaut des actions `webhook` |
 
-Métriques disponibles : `cpu.usage` (0-100), `mem.usage` (0-100), `mem.available` (MiB), `swap.usage` (0-100), `load.load1`, et par point de montage `disk.usage` (0-100), `disk.free` (octets), `disk.inodes` (0-100, pourcentage d'inodes utilisés). Les métriques `disk.*` exigent un champ `mount` ; les autres l'interdisent.
+Métriques : `cpu.usage` (0-100), `mem.usage` (0-100), `mem.available`
+(Mio), `swap.usage` (0-100), `load.load1`, et par point de montage
+`disk.usage` (0-100), `disk.free` (octets), `disk.inodes` (0-100). Les
+métriques `disk.*` exigent un champ `mount` ; les autres l'interdisent.
 
-Opérateurs : `<`, `<=`, `>`, `>=`, `==`. Comparaison exacte sur `==` (décimaux).
-
-Une règle se déclenche quand sa condition est vraie depuis au moins `for`, et ne se déclenche pas plus souvent que son `cooldown`. Le compteur de durée repart de zéro dès que la condition redevient fausse.
+Opérateurs : `<`, `<=`, `>`, `>=`, `==`. Une règle se déclenche quand sa
+condition est vraie depuis au moins `for` et ne se déclenche pas plus
+souvent que son `cooldown` ; le compteur repart de zéro dès que la
+condition redevient fausse.
 
 ### Variables dans les actions
 
-`{{.RuleName}}`, `{{.Severity}}`, `{{.Value}}`, `{{.Threshold}}`, `{{.Hostname}}`, `{{.Timestamp}}` (syntaxe template Go). Le webhook envoie un JSON avec ces champs ; la validation accepte une URL http(s), l'envoi ne supporte que `http://` (pas de TLS : prévu dans une tranche dédiée). L'action `exec` reçoit aussi `SG_RULE_NAME`, `SG_SEVERITY`, `SG_VALUE`, `SG_THRESHOLD`, `SG_HOSTNAME`, `SG_TIMESTAMP` dans son environnement, et la commande est découpée sans shell (pas de pipe ni de `&&`).
+`{{.RuleName}}`, `{{.Severity}}`, `{{.Value}}`, `{{.Threshold}}`,
+`{{.Hostname}}`, `{{.Timestamp}}` (syntaxe template Go). Le webhook envoie
+un JSON avec ces champs ; la validation accepte une URL http(s), l'envoi
+ne supporte que `http://` (TLS en tranche future). L'action `exec` reçoit
+aussi `SG_RULE_NAME`, `SG_SEVERITY`, `SG_VALUE`, `SG_THRESHOLD`,
+`SG_HOSTNAME`, `SG_TIMESTAMP`, et la commande est découpée sans shell (pas
+de pipe ni de `&&`).
 
-### Durée du premier cycle
+### Optimisation mémoire
 
-Le calcul CPU demande deux lectures de `/proc/stat` : le premier tick rapporte `cpu.usage = 0`. Éviter un seuil `cpu.usage < x` sur ce premier tick ou poser un `for` non nul.
+```yaml
+optimisation:
+  intervalle: 10s
+  swappiness: auto          # auto = 133 si zram présent, sinon intact
+  page_cluster: auto        # auto = 0 si zram présent
+  zram_provisionner: oui    # crée le swap compressé s'il n'existe aucun swap
+  zram_algorithme: auto     # auto = zstd si ≥ 4 cœurs, sinon lz4
+  zswap: desactive          # coupe la double compression devant zram
+  critique_seuil: 60        # % de full avg10 (PSI)
+  critique_duree: 30s
+  critique_sortie: 40       # hystérésis de sortie
+  actions_critique:
+    - type: log
+      message: "pression mémoire critique : {{.Value}}%"
+```
 
-## CLI
+Sans privilèges, les écritures `/proc/sys` et sysfs deviennent des
+recommandations journalisées. Un swap disque existant bloque le
+provisionnement (risque d'inversion LRU) et la présence d'un gestionnaire
+de fréquence (tuned, power-profiles-daemon, auto-cpufreq) empêche tout
+doublon côté CPU.
+
+## Utilisation
 
 ```sh
-sysguard --config /etc/sysguard/sysguard.yaml   # daemon (defaut : run)
+sysguard --config /etc/sysguard/sysguard.yaml     # daemon (défaut : run)
 sysguard check --config /etc/sysguard/sysguard.yaml
-sysguard dry-run --config ... [--once]          # evalue sans executer les actions
+sysguard dry-run --config ... [--once]            # évalue sans exécuter
+sysguard optimise --config ... [--once]           # lance l'optimiseur
 sysguard version
 ```
 
@@ -64,84 +121,15 @@ sysguard version
 
 ## systemd et durcissement
 
-L'unit `packaging/sysguard.service` tourne en `Type=notify` avec `WatchdogSec=60` : le daemon envoie `WATCHDOG=1` au tiers de l'intervalle, seulement si la dernière collecte a réussi — une collecte bloquée mène au redémarrage. `Restart=on-failure` couvre watchdog, timeout et OOM.
-
-L'unit applique un sandbox strict (voir `systemd-analyze security sysguard`) : système en lecture seule, pas de privilèges, filtre d'appels système `@system-service`, seules AF_UNIX/AF_INET/AF_INET6 ouvertes. Conséquences pour les actions `exec` :
-
-- un script qui écrit hors de son répertoire doit passer par un drop-in avec `ReadWritePaths=` (ex. `systemctl edit sysguard`)
-- `PrivateTmp=yes` isole `/tmp` : pas d'échange de fichiers par `/tmp` avec l'extérieur
-- `NoNewPrivileges` interdit `sudo` dans les scripts
-
-## Optimiseur (PSI, zram, tuning mémoire)
-
-`sysguard optimise` lance un second daemon (unité `packaging/sysguard-opt.service`)
-qui :
-
-- pose le socle statique au démarrage : `vm.swappiness` (défaut `133` avec
-  zram, la doc noyau donne 133 pour un swap deux fois plus rapide que le
-  système de fichiers), `vm.page-cluster` (`0` avec zram, pratique des
-  distributions) et l'algorithme zram demandé (`zram_algorithme: zstd`) ;
-- suit la pression mémoire PSI (`/proc/pressure/memory`) : alerte critique
-  à `critique_seuil` % de `full` avg10 tenu `critique_duree` (défauts
-  systemd-oomd : 60 % / 30 s) avec `actions_critique` (mêmes actions que
-  les règles), hystérésis de sortie décalée (`critique_sortie`, défaut 40 %)
-  contre l'oscillation des moyennes PSI ;
-- à pression soutenue, journalise l'état de santé zram (ratio de compression
-  réel lu dans `mm_stat`) et déclenche la recompression des pages idle si le
-  noyau expose `recompress` (6.2+, CONFIG_ZRAM_MULTI_COMP).
-
-Sans privilèges (euid != 0), les écritures `/proc/sys` et sysfs deviennent
-des recommandations journalisées. Le changement d'algorithme zram à chaud
-est refusé par le noyau sur un device actif (EBUSY) : le régler au boot via
-zram-generator (`compression-algorithm`). PSI doit être actif (`psi=1` sur
-les images Debian cloud qui l'ont désactivé) : l'optimiseur détecte un PSI
-figé (compteur `total` immobile) et bascule en repli journalisé.
-
-Exemple de section :
-
-```yaml
-optimisation:
-  intervalle: 10s
-  swappiness: auto        # auto = 133 si zram présent, sinon intact
-  page_cluster: auto      # auto = 0 si zram présent
-  zram_algorithme: zstd
-  critique_seuil: 60
-  critique_duree: 30s
-  critique_sortie: 40
-  actions_critique:
-    - type: log
-      message: "pression mémoire {{.Value}}%"
-```
-
-## Optimisation CPU (unité sysguard-opt)
-
-La section `cpu:` complète l'optimiseur :
-
-- `gouverneur` : appliqué au socle sur tous les cœurs (défaut : intact ;
-  cpufreq absent ou intel_pstate actif → dégradation journalisée) ;
-- `affinites` : règles admin-déclarées (nom de processus → cœurs, masques
-  larges conseillés) appliquées de façon idempotente à chaque pas, y
-  compris aux processus nés après le démarrage ; jamais d'auto-épinglage
-  (EEVDF équilibre mieux des tâches libres) ;
-- pression CPU PSI à hystérésis (`critique_seuil/duree/sortie`,
-  `soutenue_seuil/duree`) : l'alerte critique **nomme le principal
-  consommateur** (delta /proc/[pid]/stat) et exécute `actions_critique` ;
-- `demotion` (opt-in, défaut OFF) : sous pression critique, les processus
-  matchant `patterns` (hors `exceptions`) passent à `nice` (défaut 19,
-  part CPU garantie plutôt que SCHED_IDLE qui peut mourir de faim) ;
-  restaurés à 0 quand la pression retombe sous la bande de sortie ;
-- détection de PSI figé **sous charge** (compteur total immobile avec
-  load1 ≥ 0,5) → repli journalisé ; au repos un total immobile est normal.
-
-La répartition canonique reste cgroup v2 côté systemd (`CPUWeight=`,
-`CPUQuota=`) : le daemon ne gère pas les cgroups.
-
-## Limites v0.1
-
-- Pas d'hystérésis de retour (seuil de retour distinct du seuil d'alerte) : prévue v0.2
-- Une seule condition par règle (AND multi-conditions : v0.2)
-- Métriques réseau, processus et température : v0.2 et v0.3
-- Pas d'export Prometheus
+L'unit `packaging/sysguard.service` tourne en `Type=notify` avec
+`WatchdogSec=60` : le daemon envoie `WATCHDOG=1` seulement si la dernière
+collecte a réussi — une collecte bloquée mène au redémarrage.
+`Restart=on-failure` couvre watchdog, timeout et OOM. L'unit applique un
+sandbox strict : système en lecture seule, pas de privilèges, filtre
+d'appels système `@system-service`, seules AF_UNIX/AF_INET/AF_INET6
+ouvertes. Conséquences pour les actions `exec` : pas d'écriture hors du
+répertoire de la règle sans drop-in `ReadWritePaths=`, `/tmp` isolé,
+`sudo` interdit dans les scripts.
 
 ## Développement
 
@@ -154,4 +142,17 @@ make audit           # cargo audit (base RustSec)
 make construire      # binaire release dans build/sysguard
 ```
 
-Rust (édition 2024, `cargo` ≥ 1.97). Dépendances : `libc` et `signal-hook` seulement. Le binaire release se dépose sur n'importe quel Linux amd64 x86-64 (glibc ≥ 2.32).
+Rust édition 2024, `cargo` ≥ 1.97. Tests : 203 cas (composant,
+intégration, cible système réelle), couverture ≥ 90 % lignes et régions,
+campagne ISTQB / ISO 29119 documentée dans `docs/`.
+
+## Benchmarks (VM Debian 13, 4 vCPU, fenêtres 120 s)
+
+| Candidat | CPU au repos | Mémoire cgroup | Latence détection |
+|---|---|---|---|
+| script shell natif (même rôle) | 0,162 % | 436 Ko | 8,5-8,9 s |
+| vmstat 5 (collecte seule) | 0,007 % | 448 Ko | N/A |
+| sar 5 (collecte seule) | 0,009 % | 924 Ko | N/A |
+| **SysGuard** | **0,018 %** | **496 Ko** | 9,1-12,5 s |
+
+Détails et protocole : `benchmark/resultats/`.
