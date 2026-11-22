@@ -144,7 +144,7 @@ make audit           # cargo audit (base RustSec)
 make construire      # binaire release dans build/sysguard
 ```
 
-Rust édition 2024, `cargo` ≥ 1.97. Tests : 203 cas (composant,
+Rust édition 2024, `cargo` ≥ 1.97. Tests : 207 cas (composant,
 intégration, cible système réelle), couverture ≥ 90 % lignes et régions,
 campagne ISTQB / ISO 29119 documentée dans `docs/`.
 

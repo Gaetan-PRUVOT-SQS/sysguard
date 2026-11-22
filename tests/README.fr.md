@@ -1,100 +1,98 @@
 [English](README.md) | Français
 
-English | [Français](README.fr.md)
+# Cahier de recette — SysGuard v1.4
 
-# Acceptance test file — SysGuard v1.4
+Recette fonctionnelle du daemon SysGuard (superviseur + optimiseur),
+exécutée le 2026-11-22 sur deux environnements :
 
-Functional acceptance of the SysGuard daemon (supervisor + optimizer),
-executed on 2026-11-22 on two environments:
-
-| Environment | OS | RAM | Swap | Role |
+| Environnement | OS | RAM | Swap | Rôle |
 |---|---|---|---|---|
-| Debian 13 VM (QEMU/KVM) | 6.12, 4 vCPU | 6 GB | zram (test) | controlled test bench |
-| Real VPS (KVM) | 7.0, 8 vCPU | 16.7 GB | 8 GB swapfile | production |
+| VM Debian 13 (QEMU/KVM) | 6.12, 4 vCPU | 6 Go | zram (test) | banc de test maîtrisé |
+| VPS réel (KVM) | 7.0, 8 vCPU | 16,7 Go | swapfile 8 Go | production |
 
-Each case cites its requirement (spec §), its procedure, its expected
-result and its verdict. Automated cases reference their test in the
-repository (`cargo test` / `make test`). Detailed campaign:
+Chaque cas cite son exigence (spec §), sa procédure, son résultat attendu
+et son verdict. Les cas automatisés renvoient à leur test dans le dépôt
+(`cargo test` / `make test`). Campagne détaillée :
 `docs/campagne-tests-istqb-29119.md`.
 
-## R1 — Monitoring and reaction (spec §2)
+## R1 — Supervision et réaction (spec §2)
 
-| ID | Procedure | Expected | Verdict |
+| ID | Procédure | Attendu | Verdict |
 |---|---|---|---|
-| REC-1.1 | Start the service, check its state | `systemctl is-active` = active, Type=notify | ✅ VM + VPS |
-| REC-1.2 | Load memory past the critical threshold held 10 s | `pression memoire critique` trace in the journal | ✅ VM |
-| REC-1.3 | Release the load | `retombee` trace, no residue | ✅ VM |
-| REC-1.4 | Consume CPU past the threshold | alert naming the top consumer | ✅ VM |
-| REC-1.5 | Check test coverage (lines/regions) | ≥ 90 % each axis | ✅ 94.4 / 93.5 |
+| REC-1.1 | Démarrer le service, vérifier son état | `systemctl is-active` = active, Type=notify | ✅ VM + VPS |
+| REC-1.2 | Charger la mémoire au-delà du seuil critique tenu 10 s | trace `pression memoire critique` dans le journal | ✅ VM |
+| REC-1.3 | Relâcher la charge | trace `retombee`, aucun résidu | ✅ VM |
+| REC-1.4 | Consommer le CPU au-delà du seuil | alerte nommant le principal consommateur | ✅ VM |
+| REC-1.5 | Vérifier la couverture de tests (lignes/régions) | ≥ 90 % sur chaque axe | ✅ 94,4 / 93,5 |
 
 ## R2 — Actions (spec §2.3)
 
-| ID | Procedure | Expected | Verdict |
+| ID | Procédure | Attendu | Verdict |
 |---|---|---|---|
-| REC-2.1 | `log` action with `{{.Value}}`, `{{.Hostname}}` variables | interpolated message in the JSON journal | ✅ |
-| REC-2.2 | `webhook` action to a local HTTP receiver | JSON POST with rule/severity/value/timestamp fields | ✅ VM |
-| REC-2.3 | `exec` action with SG_* variables | script receives SG_RULE_NAME/SEVERITY/VALUE | ✅ |
-| REC-2.4 | `exec` exceeding its timeout | process killed, error logged | ✅ |
-| REC-2.5 | `dry-run` config | evaluated without running webhook/exec actions | ✅ |
+| REC-2.1 | Action `log` avec variables `{{.Value}}`, `{{.Hostname}}` | message interpolé dans le journal JSON | ✅ |
+| REC-2.2 | Action `webhook` vers un récepteur HTTP local | POST JSON avec champs rule/severity/value/timestamp | ✅ VM |
+| REC-2.3 | Action `exec` avec variables SG_* | le script reçoit SG_RULE_NAME/SEVERITY/VALUE | ✅ |
+| REC-2.4 | `exec` dépassant son timeout | processus tué, erreur journalisée | ✅ |
+| REC-2.5 | Config en `dry-run` | évaluée sans exécuter les actions webhook/exec | ✅ |
 
 ## R3 — Configuration (spec §4)
 
-| ID | Procedure | Expected | Verdict |
+| ID | Procédure | Attendu | Verdict |
 |---|---|---|---|
-| REC-3.1 | `check` on the 36 invalid configurations | refusal with explicit message and exit code 1 | ✅ |
-| REC-3.2 | `check` on a valid config | "configuration valide", exit code 0 | ✅ |
-| REC-3.3 | SIGHUP on the service | "configuration rechargée" | ✅ VM + VPS |
-| REC-3.4 | Hostile YAML config (500 random inputs) | never panics | ✅ |
+| REC-3.1 | `check` sur les 36 configurations invalides | refus avec message explicite et code de sortie 1 | ✅ |
+| REC-3.2 | `check` sur une config valide | « configuration valide », code de sortie 0 | ✅ |
+| REC-3.3 | SIGHUP sur le service | « configuration rechargée » | ✅ VM + VPS |
+| REC-3.4 | Config YAML hostile (500 entrées aléatoires) | aucune panique | ✅ |
 
-## R4 — Memory optimizer (PSI, zram)
+## R4 — Optimiseur mémoire (PSI, zram)
 
-| ID | Procedure | Expected | Verdict |
+| ID | Procédure | Attendu | Verdict |
 |---|---|---|---|
-| REC-4.1 | No swap + `zram_provisionner: oui` (root) | zram created, mkswap, swapon priority 100 | ✅ VM |
-| REC-4.2 | Disk swap already present | provisioning refused (LRU inversion), zones named | ✅ VM + VPS |
-| REC-4.3 | After provisioning, install zram-generator | config applied on next boot | ✅ VM |
-| REC-4.4 | Without privileges | logged recommendations, no write, exit code 0 | ✅ VM + VPS |
-| REC-4.5 | Auto swappiness/page-cluster with zram | 133 / 0 applied | ✅ VM |
-| REC-4.6 | Frozen PSI counter (psi absent), machine under load | warning + fallback, no false alert | ✅ VM + VPS |
+| REC-4.1 | Pas de swap + `zram_provisionner: oui` (root) | zram créé, mkswap, swapon priorité 100 | ✅ VM |
+| REC-4.2 | Swap disque déjà présent | provisionnement refusé (inversion LRU), zones nommées | ✅ VM + VPS |
+| REC-4.3 | Après provisionnement, installer zram-generator | config appliquée au boot suivant | ✅ VM |
+| REC-4.4 | Sans privilèges | recommandations journalisées, aucune écriture, code de sortie 0 | ✅ VM + VPS |
+| REC-4.5 | Swappiness/page-cluster auto avec zram | 133 / 0 appliqués | ✅ VM |
+| REC-4.6 | Compteur PSI figé (psi absent), machine sous charge | avertissement + repli, aucune fausse alerte | ✅ VM + VPS |
 
-## R5 — CPU optimizer
+## R5 — Optimiseur CPU
 
-| ID | Procedure | Expected | Verdict |
+| ID | Procédure | Attendu | Verdict |
 |---|---|---|---|
-| REC-5.1 | Active manager (tuned / PPD / auto-cpufreq) | governor and EPP untouched, no duplication | ✅ VPS |
-| REC-5.2 | No manager, cpufreq absent | logged degradation | ✅ VM + VPS |
-| REC-5.3 | irqbalance absent | logged recommendation | ✅ VM + VPS |
-| REC-5.4 | Critical CPU pressure, hog matching a pattern | configured nice demotion, restored on release | ✅ VM |
+| REC-5.1 | Gestionnaire actif (tuned / PPD / auto-cpufreq) | gouverneur et EPP intacts, aucun doublon | ✅ VPS |
+| REC-5.2 | Pas de gestionnaire, cpufreq absent | dégradation journalisée | ✅ VM + VPS |
+| REC-5.3 | irqbalance absent | recommandation journalisée | ✅ VM + VPS |
+| REC-5.4 | Pression CPU critique, gourmand matchant un pattern | relégation nice configurée, restaurée à la retombée | ✅ VM |
 
-## R6 — systemd integration
+## R6 — Intégration systemd
 
-| ID | Procedure | Expected | Verdict |
+| ID | Procédure | Attendu | Verdict |
 |---|---|---|---|
-| REC-6.1 | Type=notify service startup | READY=1 received, service active < 2 s | ✅ VM + VPS |
-| REC-6.2 | Watchdog armed, service active past WatchdogSec | no watchdog kill | ✅ VM + VPS |
-| REC-6.3 | SIGHUP | reload or argued refusal | ✅ VM + VPS |
-| REC-6.4 | `systemd-analyze security` | low exposure | ✅ 1.9/10 |
+| REC-6.1 | Démarrage du service Type=notify | READY=1 reçu, service actif < 2 s | ✅ VM + VPS |
+| REC-6.2 | Watchdog armé, service actif au-delà de WatchdogSec | aucun kill watchdog | ✅ VM + VPS |
+| REC-6.3 | SIGHUP | rechargement ou refus argumenté | ✅ VM + VPS |
+| REC-6.4 | `systemd-analyze security` | exposition faible | ✅ 1,9/10 |
 
-## R7 — Footprint (performance type)
+## R7 — Empreinte (type performance)
 
-| ID | Procedure | Expected | Verdict |
+| ID | Procédure | Attendu | Verdict |
 |---|---|---|---|
-| REC-7.1 | Idle CPU measured by cgroup, 120 s window | < 1 % | ✅ 0.018 % |
-| REC-7.2 | RSS in operation | < 30 MB | ✅ ~2.3 MB |
-| REC-7.3 | Detection latency (4-core load) | < 30 s | ✅ 9.1-12.5 s |
+| REC-7.1 | CPU au repos mesuré par cgroup, fenêtre 120 s | < 1 % | ✅ 0,018 % |
+| REC-7.2 | RSS en fonctionnement | < 30 Mo | ✅ ~2,3 Mo |
+| REC-7.3 | Latence de détection (charge 4 cœurs) | < 30 s | ✅ 9,1-12,5 s |
 
-## Security
+## Sécurité
 
-| ID | Procedure | Expected | Verdict |
+| ID | Procédure | Attendu | Verdict |
 |---|---|---|---|
-| SEC-1 | Dependency audit (RustSec) | 0 alerts | ✅ |
-| SEC-2 | Repository secret scan | no leak | ✅ |
-| SEC-3 | Hostile config refused without panic | exit code 1, explicit message | ✅ |
-| SEC-4 | Exec without shell, environment limited to SG_* | guest variables invisible | ✅ |
+| SEC-1 | Audit des dépendances (RustSec) | 0 alerte | ✅ |
+| SEC-2 | Scan de secrets du dépôt | aucune fuite | ✅ |
+| SEC-3 | Config hostile refusée sans panique | code de sortie 1, message explicite | ✅ |
+| SEC-4 | Exec sans shell, environnement limité aux SG_* | variables invitées invisibles | ✅ |
 
-## Summary
+## Synthèse
 
-- 203 automated cases green + system acceptance on 2 environments.
-- 0 serious incident open; campaign incidents fixed with regressions
-  (see `docs/campagne-tests-istqb-29119.md`).
-- Residual risk documented in the campaign report.
+- 207 cas automatisés verts + recette système sur 2 environnements.
+- 0 incident grave ouvert ; les incidents de campagne sont corrigés avec
+  leurs régressions (voir `docs/campagne-tests-istqb-29119.md`).
+- Risque résiduel documenté dans le rapport de campagne.

@@ -51,18 +51,20 @@ rules:
 
 # Optimiseur (unité sysguard-opt.service, `sysguard optimise`) :
 # PSI, zram et tuning mémoire. Sans la section, `optimise` refuse.
-# zram_provisionner: oui crée le swap compressé s'il n'existe aucun swap
-# (modprobe + mkswap + swapon priorité 100) et écrit
-# /etc/systemd/zram-generator.conf pour la persistance aux boots suivants
-# (installer le paquet systemd-zram-generator). Un swap disque existant
-# bloque le provisionnement (risque d'inversion LRU, voir
-# docs/justifications/provisionnement-zram.md). zswap: desactive coupe la
-# double compression devant zram.
+# Un swap disque existant bloque le provisionnement zram (risque
+# d'inversion LRU, voir docs/justifications/provisionnement-zram.md) ;
+# la persistance du provisionnement aux boots suivants demande le paquet
+# systemd-zram-generator.
 # optimisation:
 #   intervalle: 10s
 #   swappiness: auto        # auto = 133 si zram présent, sinon intact
 #   page_cluster: auto      # auto = 0 si zram présent
+#   zram_provisionner: oui  # crée le swap compressé s'il n'existe aucun
+#                           # swap (modprobe + mkswap + swapon prio 100)
+#                           # et écrit /etc/systemd/zram-generator.conf
+#   zram_taille: auto       # auto = min(ram/2, 4 Go)
 #   zram_algorithme: zstd   # appliqué si le device le permet (sinon au boot)
+#   zswap: desactive        # coupe la double compression devant zram
 #   critique_seuil: 60      # % de full avg10
 #   critique_duree: 30s
 #   critique_sortie: 40     # hystérésis de sortie
@@ -73,6 +75,7 @@ rules:
 # Optimisation CPU (unité sysguard-opt, même binaire) :
 # cpu:
 #   gouverneur: schedutil   # ou performance ; absent/VM → dégradé
+#   epp: balance_performance # préférence énergie (HWP/amd-pstate)
 #   affinites:
 #     - nom: montraitement
 #       coeurs: "0-1"       # masques larges conseillés (L3/NUMA)

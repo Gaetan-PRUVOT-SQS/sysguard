@@ -92,7 +92,7 @@ repository (`cargo test` / `make test`). Detailed campaign:
 
 ## Summary
 
-- 203 automated cases green + system acceptance on 2 environments.
+- 207 automated cases green + system acceptance on 2 environments.
 - 0 serious incident open; campaign incidents fixed with regressions
   (see `docs/campagne-tests-istqb-29119.md`).
 - Residual risk documented in the campaign report.
