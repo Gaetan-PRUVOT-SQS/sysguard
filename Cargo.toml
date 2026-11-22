@@ -1,0 +1,19 @@
+[package]
+name = "sysguard"
+version = "1.0.0"
+edition = "2024"
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+all = "deny"
+
+[profile.release]
+lto = "thin"
+strip = true
+codegen-units = 1
+
+[dependencies]
+libc = "0.2"
+signal-hook = "0.3"
