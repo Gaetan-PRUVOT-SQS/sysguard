@@ -1,6 +1,7 @@
 pub mod action;
 pub mod cli;
 pub mod collect;
+pub mod compression;
 pub mod config;
 pub mod daemon;
 pub mod duration;
@@ -9,6 +10,8 @@ pub mod eval;
 pub mod file;
 pub mod log;
 pub mod notify;
+pub mod optimisation;
+pub mod pression;
 pub mod sys;
 pub mod time;
 pub mod yaml;
