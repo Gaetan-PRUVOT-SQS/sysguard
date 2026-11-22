@@ -115,11 +115,11 @@ jobs:
         conteneur: [debian:13, ubuntu:24.04]
     container: ${{ matrix.conteneur }}
     steps:
-      - name: Prerequis (git, curl, certificats)
+      - name: Prerequis (git, curl, certificats, build)
         run: |
           apt-get update -qq
           DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-            git ca-certificates curl
+            git ca-certificates curl build-essential
 
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
