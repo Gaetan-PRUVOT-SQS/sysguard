@@ -395,3 +395,21 @@ réels, docs/packaging/VM). Les états intermédiaires ne compilent pas tous
 réparé un lib.rs tronqué par le script d'import. Marqueur
 `.mode-side-project` exclu via .git/info/exclude. Aucun remote : push sur
 demande explicite.
+
+## Campagne parseur YAML (ISO 29119) — 2026-11-22
+
+Campagne dédiée au parseur YAML (composant au risque le plus élevé) :
+doc docs/campagne-yaml-29119.md. Deux défauts trouvés par sondes
+hors suite et corrigés avec régressions :
+
+- **I-4** : BOM UTF-8 en tête de fichier → clé fantôme, config rejetée
+  avec message abscons (configs éditées sous Windows). Corrigé : BOM
+  retiré silencieusement.
+- **I-5** : nidification profonde (5 000 niveaux) → **stack overflow,
+  abort du daemon** (crash complet sur entrée hostile). Corrigé : cap de
+  profondeur 32, rejet propre « profondeur YAML excessive ».
+
+Durcissements testés : BOM retiré, 100 niveaux → rejet propre, 10
+niveaux → OK, fuzz enrichi (3 graines × 300 entrées, unicode
+multi-octets). Couverture yaml.rs : 97,9 % lignes, 100 % branches,
+96,8 % régions. Suite : 179 unitaires verts, 6/6 suites.

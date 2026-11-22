@@ -22,6 +22,7 @@ pub fn valeur_texte(noeud: &Node) -> &str {
 }
 
 pub fn parse(texte: &str) -> Result<Node> {
+    let texte = texte.strip_prefix('\u{feff}').unwrap_or(texte);
     let lignes = tokeniser(texte)?;
     let mut an = Analyse { lignes, pos: 0 };
     analyser_document(&mut an)
@@ -87,14 +88,21 @@ fn analyser_document(an: &mut Analyse) -> Result<Node> {
     }
     let indent = an.lignes[0].indent;
     let mut racine = Node::Map(Vec::new());
-    parse_bloc(&mut racine, an, indent)?;
+    parse_bloc(&mut racine, an, indent, 0)?;
     if an.pos < an.lignes.len() {
         return Err(erreur_ligne(an.pos));
     }
     Ok(racine)
 }
 
-fn parse_bloc(noeud: &mut Node, an: &mut Analyse, indent: usize) -> Result<()> {
+const MAX_PROFONDEUR: usize = 32;
+
+fn parse_bloc(noeud: &mut Node, an: &mut Analyse, indent: usize, profondeur: usize) -> Result<()> {
+    if profondeur > MAX_PROFONDEUR {
+        return Err(Error::new(format!(
+            "profondeur YAML excessive (max {MAX_PROFONDEUR})"
+        )));
+    }
     if an.pos >= an.lignes.len() || an.lignes[an.pos].indent < indent {
         return Ok(());
     }
@@ -106,21 +114,21 @@ fn parse_bloc(noeud: &mut Node, an: &mut Analyse, indent: usize) -> Result<()> {
         if texte.as_bytes().get(1) != Some(&b' ') {
             return Err(Error::new(format!("element invalide ligne {}", an.pos + 1)));
         }
-        *noeud = parse_liste(an, indent)?;
+        *noeud = parse_liste(an, indent, profondeur + 1)?;
     } else {
-        *noeud = parse_carte(an, indent)?;
+        *noeud = parse_carte(an, indent, profondeur + 1)?;
     }
     Ok(())
 }
 
-fn parse_carte(an: &mut Analyse, indent: usize) -> Result<Node> {
+fn parse_carte(an: &mut Analyse, indent: usize, profondeur: usize) -> Result<Node> {
     let mut entries = Vec::new();
     while an.pos < an.lignes.len()
         && an.lignes[an.pos].indent == indent
         && !an.lignes[an.pos].texte.starts_with('-')
     {
         let texte = an.lignes[an.pos].texte.clone();
-        parse_entree(&mut entries, an, indent, &texte)?;
+        parse_entree(&mut entries, an, indent, profondeur, &texte)?;
     }
     Ok(Node::Map(entries))
 }
@@ -129,13 +137,14 @@ fn parse_entree(
     entries: &mut Vec<(String, Node)>,
     an: &mut Analyse,
     indent: usize,
+    profondeur: usize,
     texte: &str,
 ) -> Result<()> {
     let (cle, rest) = extraire_cle(texte, an.pos)?;
     if entries.iter().any(|(k, _)| *k == cle) {
         return Err(Error::new(format!("cle dupliquee : {cle}")));
     }
-    let noeud = scalaire_ou_bloc(an, indent, rest)?;
+    let noeud = scalaire_ou_bloc(an, indent, profondeur, rest)?;
     entries.push((cle, noeud));
     Ok(())
 }
@@ -165,7 +174,12 @@ fn extraire_cle(texte: &str, pos: usize) -> Result<(String, &str)> {
     Ok((cle.to_string(), &texte[i + 1..]))
 }
 
-fn scalaire_ou_bloc(an: &mut Analyse, indent: usize, rest: &str) -> Result<Node> {
+fn scalaire_ou_bloc(
+    an: &mut Analyse,
+    indent: usize,
+    profondeur: usize,
+    rest: &str,
+) -> Result<Node> {
     let rest = rest.trim_start_matches([' ', '\t']);
     if !rest.is_empty() {
         an.pos += 1;
@@ -175,7 +189,7 @@ fn scalaire_ou_bloc(an: &mut Analyse, indent: usize, rest: &str) -> Result<Node>
         an.pos += 1;
         let indent_enfant = an.lignes[an.pos].indent;
         let mut noeud = Node::Scalar(String::new());
-        parse_bloc(&mut noeud, an, indent_enfant)?;
+        parse_bloc(&mut noeud, an, indent_enfant, profondeur + 1)?;
         return Ok(noeud);
     }
     an.pos += 1;
@@ -205,20 +219,20 @@ fn scalaire_texte(rest: &str) -> Result<Node> {
     Ok(Node::Scalar(rest.to_string()))
 }
 
-fn parse_liste(an: &mut Analyse, indent: usize) -> Result<Node> {
+fn parse_liste(an: &mut Analyse, indent: usize, profondeur: usize) -> Result<Node> {
     let mut items = Vec::new();
     while an.pos < an.lignes.len()
         && an.lignes[an.pos].indent == indent
         && an.lignes[an.pos].texte.starts_with('-')
         && an.lignes[an.pos].texte.as_bytes().get(1) == Some(&b' ')
     {
-        let item = parse_item(an, indent)?;
+        let item = parse_item(an, indent, profondeur)?;
         items.push(item);
     }
     Ok(Node::List(items))
 }
 
-fn parse_item(an: &mut Analyse, indent: usize) -> Result<Node> {
+fn parse_item(an: &mut Analyse, indent: usize, profondeur: usize) -> Result<Node> {
     let texte = an.lignes[an.pos].texte[2..]
         .trim_start_matches([' ', '\t'])
         .to_string();
@@ -227,13 +241,13 @@ fn parse_item(an: &mut Analyse, indent: usize) -> Result<Node> {
         return Ok(Node::Scalar(texte));
     }
     let mut entries = Vec::new();
-    parse_entree(&mut entries, an, indent + 2, &texte)?;
+    parse_entree(&mut entries, an, indent + 2, profondeur, &texte)?;
     while an.pos < an.lignes.len()
         && an.lignes[an.pos].indent == indent + 2
         && !an.lignes[an.pos].texte.starts_with('-')
     {
         let suite = an.lignes[an.pos].texte.clone();
-        parse_entree(&mut entries, an, indent + 2, &suite)?;
+        parse_entree(&mut entries, an, indent + 2, profondeur, &suite)?;
     }
     Ok(Node::Map(entries))
 }
@@ -441,6 +455,32 @@ mod tests {
     fn cherche_dans_carte_inexistante() {
         let doc = analyser("a: 1\n").expect("valide");
         assert!(cherche(&doc, "b").is_none());
+    }
+
+    #[test]
+    fn bom_utf8_retrire_silencieusement() {
+        let doc = analyser("\u{feff}global:\n  a: 1\n").expect("valide");
+        let global = cherche(&doc, "global").expect("clé sans BOM");
+        assert!(matches!(global, Node::Map(_)));
+    }
+
+    #[test]
+    fn nidification_profonde_rejetee_proprement() {
+        // 100 niveaux > MAX_PROFONDEUR (32) : rejet propre, jamais de crash
+        let mut texte = String::new();
+        for i in 0..100 {
+            texte.push_str(&" ".repeat(i));
+            texte.push_str(&format!("cle{i}:\n"));
+        }
+        let e = analyser(&texte).expect_err("rejet attendu");
+        assert!(e.to_string().contains("profondeur YAML excessive"), "{e}");
+        // 10 niveaux : sous le cap, parse OK
+        let mut texte = String::new();
+        for i in 0..10 {
+            texte.push_str(&" ".repeat(i));
+            texte.push_str(&format!("cle{i}:\n"));
+        }
+        assert!(analyser(&texte).is_ok());
     }
 
     #[test]
