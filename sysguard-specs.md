@@ -3,7 +3,8 @@
 **Version** : 0.1 (draft)  
 **Date** : 20 novembre 2026  
 **Statut** : HISTORIQUE — spécification initiale du projet. La version
-courante du produit est celle de `Cargo.toml` ; les éléments non livrés
+courante du produit est celle de `Cargo.toml` ; la référence de ce que
+v1.4 fait aujourd'hui est `docs/reference.md`. Les éléments non livrés
 (endpoint status, notifications desktop, export Prometheus) restent en
 roadmap (§10).  
 

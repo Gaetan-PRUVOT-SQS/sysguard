@@ -29,6 +29,7 @@ install -m 644 "$RACINE/packaging/sysguard-opt.service" \
 	"$STAGE/usr/lib/systemd/system/sysguard-opt.service"
 install -m 640 "$RACINE/configs/sysguard.yaml.example" \
 	"$STAGE/etc/sysguard/sysguard.yaml.example"
+install -m 644 "$RACINE/LICENSE" "$STAGE/usr/share/doc/sysguard/LICENSE"
 
 cat >"$STAGE/DEBIAN/control" <<CONTROLE
 Package: sysguard
@@ -49,7 +50,8 @@ Upstream-Name: sysguard
 Source: https://github.com/Gaetan-PRUVOT-SQS/sysguard
 
 Copyright: SysGuard project authors
-License: voir le depot amont
+License: MIT
+    Licence MIT, texte complet dans le fichier LICENSE du depot amont.
 COPYRIGHT
 
 cat >"$STAGE/DEBIAN/postinst" <<AFTER_INSTALL

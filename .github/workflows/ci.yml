@@ -102,3 +102,41 @@ jobs:
           git add -u
           git commit -m "CI : formatage et corrections clippy automatiques"
           git push origin HEAD:main
+
+  distributions:
+    name: ${{ matrix.conteneur }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        conteneur: [debian:13, ubuntu:24.04]
+    container: ${{ matrix.conteneur }}
+    steps:
+      - name: Prerequis (git, curl, certificats)
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            git ca-certificates curl
+
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      # Toolchain via rustup-init téléchargé et exécuté (pas de
+      # curl | sh) : les paquets distro restent sous la version exigée
+      # par l'édition 2024.
+      - name: Toolchain stable
+        run: |
+          curl -sLO \
+            https://static.rust-lang.org/rustup/dist/x86_64-unknown-linux-gnu/rustup-init
+          chmod +x rustup-init
+          ./rustup-init -y --profile minimal --default-toolchain stable \
+            --component rustfmt,clippy
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Tests
+        run: make test
+
+      - name: Lint
+        run: make lint

@@ -2,6 +2,8 @@
 name = "sysguard"
 version = "1.4.0"
 edition = "2024"
+license = "MIT"
+description = "Daemon Linux de supervision avec reaction automatique et optimiseur (PSI, zram, CPU)"
 
 [lints.rust]
 unsafe_code = "deny"

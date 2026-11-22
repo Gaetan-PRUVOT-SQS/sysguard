@@ -181,3 +181,6 @@ corrigé et le correctif est committé si elle reste verte. Tout autre
 | **SysGuard** | **0,018 %** | **496 Ko** | 9,1-12,5 s |
 
 Détails et protocole : `benchmark/resultats/`.
+
+Documentation de référence : `docs/reference.md`. Licence : MIT (voir
+[LICENSE](LICENSE)).

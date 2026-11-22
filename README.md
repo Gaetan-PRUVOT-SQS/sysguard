@@ -177,3 +177,6 @@ stays green. Any other failure fails the run.
 | **SysGuard** | **0.018 %** | **496 KiB** | 9.1-12.5 s |
 
 Details and protocol: `benchmark/resultats/`.
+
+Reference documentation: `docs/reference.md`. License: MIT (see
+[LICENSE](LICENSE)).
