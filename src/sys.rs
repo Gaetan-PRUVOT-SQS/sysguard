@@ -63,6 +63,15 @@ pub fn fixe_affinite(pid: i32, coeurs: &[usize]) -> io::Result<()> {
     Ok(())
 }
 
+/// kill(-pid, SIGKILL) : tue le groupe de processus dont l'enfant est le
+/// leader (spawn avec process_group(0)). Faux si le groupe n'existe plus.
+#[allow(unsafe_code)]
+pub fn tuer_groupe(pid: u32) -> bool {
+    // SAFETY : kill(2) avec un pgid dérivé d'un pid vivant, signal constant.
+    let rc = unsafe { libc::kill(-(i32::try_from(pid).unwrap_or(i32::MAX)), libc::SIGKILL) };
+    rc == 0
+}
+
 /// Commande externe directe, sans shell, échec propagé.
 pub fn commande(prog: &str, args: &[&str]) -> io::Result<()> {
     let statut = std::process::Command::new(prog)

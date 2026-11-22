@@ -1,4 +1,5 @@
 use std::io::Write;
+use std::os::unix::process::CommandExt;
 use std::process::Command;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -30,6 +31,7 @@ pub fn exec<W: Write>(
     commande
         .args(&argv[1..])
         .env_clear()
+        .process_group(0)
         .env("SG_RULE_NAME", &v.nom)
         .env("SG_SEVERITY", v.severite)
         .env("SG_VALUE", &v.valeur)
@@ -64,7 +66,12 @@ fn attendre(enfant: &mut std::process::Child, delai_ms: i64) -> Result<()> {
             Err(e) => return Err(Error::new(format!("action exec : {e}"))),
         }
     }
-    let _ = enfant.kill();
+    // Le timeout tue le groupe entier : la descendance lancée par la
+    // commande meurt avec elle (l'enfant est leader de son groupe).
+    let pid = enfant.id();
+    if !crate::sys::tuer_groupe(pid) {
+        let _ = enfant.kill();
+    }
     enfant
         .wait()
         .map_err(|e| Error::new(format!("action exec : {e}")))?;
@@ -91,5 +98,43 @@ mod tests {
         assert!(decoupe("").is_empty());
         assert!(decoupe("   \t ").is_empty());
         assert_eq!(decoupe("/a\tb c"), vec!["/a", "b", "c"]);
+    }
+
+    #[test]
+    fn timeout_tue_la_descendance() {
+        // Un script qui lance un arrière-plan (descendance) puis dort :
+        // le timeout doit tuer les deux, pas seulement le leader.
+        let dir = format!("{}/target/test-exec", env!("CARGO_MANIFEST_DIR"));
+        std::fs::create_dir_all(&dir).expect("repertoire de trace");
+        let script = format!("{dir}/descendance.sh");
+        let trace = format!("{dir}/descendance.pid");
+        std::fs::write(
+            &script,
+            format!("#!/bin/sh\nsleep 300 &\necho $! > {trace}\nsleep 300\n"),
+        )
+        .expect("script ecrit");
+        let mut enfant = Command::new("/bin/sh")
+            .arg("-c")
+            .arg(format!(". {script}"))
+            .process_group(0)
+            .spawn()
+            .expect("spawn");
+        let resultat = attendre(&mut enfant, 400);
+        assert!(resultat.is_err(), "delai depasse attendu");
+        let pid_descendance =
+            std::fs::read_to_string(&trace).expect("pid de descendance ecrit");
+        let pid: u32 = pid_descendance.trim().parse().expect("pid numerique");
+        let mut mort = false;
+        for _ in 0..15 {
+            if !std::path::Path::new(&format!("/proc/{pid}")).exists() {
+                mort = true;
+                break;
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+        assert!(
+            mort,
+            "la descendance {pid} doit etre morte avec le groupe"
+        );
     }
 }
