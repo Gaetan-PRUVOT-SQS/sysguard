@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  campagne:
+    name: Campagne complete (fmt, clippy, tests, couverture, audit, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@2201cc584a476d1b508be977bbe4b7d1c7a52e9c # v2.9.3
+      - uses: taiki-e/install-action@fe3acb53a98b62c772db35de75ce0e4595e7ca8c # v2
+        with:
+          tool: cargo-llvm-cov,cargo-audit
+
+      # Auto-correctifs mecaniques uniquement : formatage puis
+      # suggestions clippy applicables automatiquement. Un echec restant
+      # (couverture, audit, test) est un incident, pas un correctif
+      # automatique.
+      - name: Auto-correctifs mecaniques
+        run: |
+          cargo fmt
+          cargo clippy --fix --all-targets
+          if ! git diff --quiet; then
+            echo "DIFF=1" >> "$GITHUB_ENV"
+          fi
+
+      # Relance : la campagne complete sur l'arbre corrige. Elle doit
+      # passer pour qu'un correctif mecanique soit committé.
+      - name: Relance de la campagne complete
+        run: make campagne
+
+      - name: Commit du correctif mecanique
+        if: env.DIFF == '1' && github.event_name == 'push'
+        run: |
+          git config user.name "Gaetan PRUVOT"
+          git config user.email "pruvot.gaetan@gmail.com"
+          git add -u
+          git commit -m "CI : formatage et corrections clippy automatiques"
+          git push origin HEAD:main
+
+      - name: Correctifs non poussables sur une PR
+        if: env.DIFF == '1' && github.event_name == 'pull_request'
+        run: |
+          git diff --stat
+          echo "correctifs mecaniques disponibles : lancer cargo fmt et cargo clippy --fix localement"
+          exit 1

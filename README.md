@@ -2,6 +2,8 @@ English | [Français](README.fr.md)
 
 # SysGuard
 
+[![CI](https://github.com/Gaetan-PRUVOT-SQS/sysguard/actions/workflows/ci.yml/badge.svg)](https://github.com/Gaetan-PRUVOT-SQS/sysguard/actions/workflows/ci.yml)
+
 A lightweight Linux daemon for system resource monitoring with automatic
 reaction and a built-in optimizer (PSI, zram, memory and CPU tuning).
 Designed for homelabs, small servers and NAS boxes that don't need a full
@@ -133,6 +135,7 @@ drop-in, isolated `/tmp`, `sudo` forbidden in scripts.
 ## Development
 
 ```sh
+make campagne        # full campaign: fmt check, clippy, tests, coverage, audit, build
 make test            # full Rust test suite
 make lint            # clippy (warnings as errors)
 make fmt             # rustfmt
@@ -144,6 +147,11 @@ make construire      # release binary in build/sysguard
 Rust edition 2024, `cargo` ≥ 1.97. Tests: 207 cases (component,
 integration, real system target), coverage ≥ 90 % lines and regions,
 ISTQB / ISO 29119 campaign documented in `docs/`.
+
+CI runs the same campaign on every push (`make campagne`). Mechanical
+fixes only (formatting, auto-applicable clippy suggestions) are applied,
+the campaign is rerun on the fixed tree, and the fix is committed when it
+stays green. Any other failure fails the run.
 
 ## Benchmarks (Debian 13 VM, 4 vCPU, 120 s windows)
 
