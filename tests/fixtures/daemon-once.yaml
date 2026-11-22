@@ -1,0 +1,23 @@
+global:
+  check_interval: 5s
+
+rules:
+  - name: once-log
+    severity: warning
+    condition:
+      metric: mem.usage
+      operator: ">"
+      value: -1
+    actions:
+      - type: log
+        message: "declenche une fois sur {{.Hostname}}"
+
+  - name: once-exec
+    severity: info
+    condition:
+      metric: load.load1
+      operator: ">="
+      value: 0
+    actions:
+      - type: exec
+        command: /bin/true

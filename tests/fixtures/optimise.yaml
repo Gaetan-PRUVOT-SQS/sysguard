@@ -1,0 +1,11 @@
+global:
+  check_interval: 5s
+
+optimisation:
+  intervalle: 2s
+  swappiness: 150
+  critique_seuil: 60
+  critique_duree: 30s
+  critique_sortie: 40
+  soutenue_seuil: 20
+  soutenue_duree: 60s
