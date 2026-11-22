@@ -482,3 +482,11 @@ relance verte ; harmonisé dans `installer.sh` et le `postinst` du paquet
   et exécuté, jamais `curl | sh`) ; tests et lint par distribution.
   Premier run : `make` et le linker absents des images minimes —
   `build-essential` ajouté aux prerequis (correctif b1ec12b).
+- **Release v1.4.0 publiée** (tag `v1.4.0`, workflow `release.yml` vert) :
+  campagne complète sur le tag avant publication,
+  https://github.com/Gaetan-PRUVOT-SQS/sysguard/releases/tag/v1.4.0 avec
+  `sysguard-1.4.0-linux-amd64.tar.gz` et `sysguard_1.4.0-1_amd64.deb`.
+  Vérifications transitives de la matrice sur le chemin : oracle zombie
+  du test descendance corrigé (état lu dans /proc/pid/stat, un container
+  récolte ses orphelins tard), oracle « > 10 processus » remplacé par
+  « le pid du test figure dans /proc » (portable, commit a737ccd).
