@@ -1,0 +1,46 @@
+global:
+  check_interval: 5s
+  log_level: info
+
+rules:
+  - name: vm-cpu
+    severity: warning
+    condition:
+      metric: cpu.usage
+      operator: ">"
+      value: 50
+    for: 5s
+    cooldown: 20s
+    actions:
+      - type: log
+        message: "CPU au-dessus de 50% pendant 5s : {{.Value}}%"
+
+  - name: vm-mem
+    severity: info
+    condition:
+      metric: mem.usage
+      operator: ">"
+      value: 1
+    for: 0s
+    cooldown: 25s
+    actions:
+      - type: log
+      - type: exec
+        command: /bin/echo "exec vm-mem SG_RULE_NAME=$SG_RULE_NAME SG_VALUE=$SG_VALUE"
+      - type: webhook
+        url: "http://10.0.2.2:9999/vm-mem"
+        message: "memoire a {{.Value}}% sur {{.Hostname}}"
+
+  - name: vm-disque
+    severity: critical
+    condition:
+      metric: disk.usage
+      mount: "/"
+      operator: ">"
+      value: 200
+    for: 0s
+    cooldown: 0s
+    actions:
+      - type: log
+        level: error
+        message: "cette regle ne doit jamais se declencher"

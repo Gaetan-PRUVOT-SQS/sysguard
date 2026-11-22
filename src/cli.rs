@@ -7,6 +7,7 @@ use crate::config;
 use crate::daemon::Daemon;
 use crate::duration::format_duration;
 use crate::log::{Level, Logger};
+use crate::optimisation::Optimiseur;
 use crate::sys::SourceReelle;
 
 pub const VERSION: &str = "1.0.0";
@@ -81,6 +82,7 @@ fn executer_commande(commande: &str, opt: &Options) -> i32 {
         }
         "check" => traiter_check(opt),
         "run" | "dry-run" => lancer_daemon(opt),
+        "optimise" => lancer_optimiseur(opt),
         _ => {
             eprintln!("commande inconnue : {commande}");
             afficher_usage(std::io::stderr().lock());
@@ -122,10 +124,6 @@ fn lancer_daemon(opt: &Options) -> i32 {
         Arc::new(AtomicBool::new(false)),
     );
     daemon.demarre()
-}
-
-fn commande_dry_run(opt: &Options) -> bool {
-    opt.commande.as_deref() == Some("dry-run")
 }
 
 fn commande_dry_run(opt: &Options) -> bool {
