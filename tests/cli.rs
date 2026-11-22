@@ -25,7 +25,7 @@ fn fixture(nom: &str) -> String {
 fn version_et_aide() {
     let (code, out, _) = sysguard(&["version"]);
     assert_eq!(code, 0);
-    assert_eq!(out, "sysguard 1.0.0\n");
+    assert_eq!(out, "sysguard 1.4.0\n");
     for aide in ["help", "-h", "--help"] {
         let (code, out, _) = sysguard(&[aide]);
         assert_eq!(code, 0, "{aide}");

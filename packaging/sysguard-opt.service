@@ -11,20 +11,29 @@ RestartSec=5s
 WatchdogSec=60
 UMask=0077
 
-NoNewPrivileges=true
+# L'optimiseur a besoin d'euid 0 (/proc/sys, sysfs), CAP_SYS_ADMIN
+# (swapon(2)) et CAP_SYS_MODULE dans le bounding set pour le modprobe
+# enfant. Tout le reste des capacites est retire.
+CapabilityBoundingSet=CAP_SYS_ADMIN CAP_SYS_MODULE
+AmbientCapabilities=
+
+# /etc/systemd (conf zram-generator), /proc/sys/vm et /sys/block/zram0
+# doivent rester accessibles : pas de ProtectKernelTunables ni
+# PrivateDevices ni ProtectKernelModules ici (le device /dev/zram0 est
+# cree par udev apres modprobe, et modprobe charge le module).
 ProtectSystem=strict
+ReadWritePaths=/etc/systemd
 ProtectHome=read-only
 PrivateTmp=true
-PrivateDevices=true
 ProtectHostname=true
 ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectClock=true
 RestrictSUIDSGID=true
 RestrictRealtime=true
 RestrictNamespaces=true
 LockPersonality=true
 MemoryDenyWriteExecute=true
-CapabilityBoundingSet=
-AmbientCapabilities=
 RestrictAddressFamilies=AF_UNIX
 SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM

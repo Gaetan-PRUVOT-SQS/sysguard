@@ -50,7 +50,7 @@ fraîche de la session.
 | Statique (clippy deny, fmt, audit RustSec, gate secrets, revue) | 4 contrôles | OK |
 | Mutation (analyse manuelle, duration.rs) | 6 mutants | 6/6 tués |
 
-Total : 202 cas automatisés verts + 1 scénario système + 6 mutants tués.
+Total : 203 cas automatisés verts + 1 scénario système + 6 mutants tués.
 Couverture finale (llvm-cov, seuils 90 en --fail-under) : lignes 94,49 %,
 régions 93,55 %, branches 93,75 %.
 

@@ -7,9 +7,9 @@ use sysguard::optimisation::{CibleReelle, CibleReglage};
 fn lectures_reelles_proc() {
     let cible = CibleReelle;
     let pression = cible.lit_pression().expect("PSI mémoire lisible");
-    assert!(pression.memoire_some >= 0.0);
+    assert!(pression.some >= 0.0);
     let pression_cpu = cible.lit_pression_cpu().expect("PSI cpu lisible");
-    assert!(pression_cpu.memoire_some >= 0.0);
+    assert!(pression_cpu.some >= 0.0);
     let load = cible.lit_load1().expect("loadavg lisible");
     assert!(load >= 0.0);
     assert!(cible.ram_octets() > 0, "MemTotal lu");

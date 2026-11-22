@@ -11,7 +11,7 @@ use crate::error::Result;
 use crate::file;
 use crate::log::{Level, Logger};
 use crate::notify;
-use crate::pression::{Pression, lire_pression};
+use crate::pression::{lire_pression, lire_pression_cpu};
 use crate::processus::{ProcessusCpu, top_consommateurs};
 
 pub const CHEMIN_SWAPPINESS: &str = "/proc/sys/vm/swappiness";
@@ -21,11 +21,11 @@ pub const CHEMIN_ZSWAP_ACTIVE: &str = "/sys/module/zswap/parameters/enabled";
 pub trait CibleReglage {
     fn lit_fichier(&self, chemin: &Path) -> io::Result<String>;
     fn ecrit_fichier(&self, chemin: &Path, valeur: &str) -> io::Result<()>;
-    fn lit_pression(&self) -> Result<Pression> {
+    fn lit_pression(&self) -> Result<crate::pression::PressionMemoire> {
         lire_pression(Path::new("/proc/pressure/memory"))
     }
-    fn lit_pression_cpu(&self) -> Result<Pression> {
-        lire_pression(Path::new("/proc/pressure/cpu"))
+    fn lit_pression_cpu(&self) -> Result<crate::pression::PressionCpu> {
+        lire_pression_cpu(Path::new("/proc/pressure/cpu"))
     }
 
     fn service_actif(&self, nom: &str) -> bool {
@@ -758,7 +758,7 @@ impl<'a, W: Write> Optimiseur<'a, W> {
             return self.pas_cpu(horloge);
         }
 
-        if pression.memoire_full >= optimisation.critique_seuil {
+        if pression.full >= optimisation.critique_seuil {
             if self.critique_depuis < 0 {
                 self.critique_depuis = maint;
             }
@@ -768,26 +768,26 @@ impl<'a, W: Write> Optimiseur<'a, W> {
                     Level::Error,
                     &format!(
                         "optimisation : pression memoire critique ({:.1}% tenu {}ms)",
-                        pression.memoire_full, optimisation.critique_duree
+                        pression.full, optimisation.critique_duree
                     ),
                 );
-                self.actions_critique(optimisation.critique_seuil, pression.memoire_full);
+                self.actions_critique(optimisation.critique_seuil, pression.full);
             }
-        } else if self.critique_actif && pression.memoire_full < optimisation.critique_sortie {
+        } else if self.critique_actif && pression.full < optimisation.critique_sortie {
             self.critique_actif = false;
             self.critique_depuis = -1;
             self.journal.write(
                 Level::Info,
                 &format!(
                     "optimisation : pression memoire retombee ({:.1}%)",
-                    pression.memoire_full
+                    pression.full
                 ),
             );
-        } else if !self.critique_actif && pression.memoire_full < optimisation.critique_sortie {
+        } else if !self.critique_actif && pression.full < optimisation.critique_sortie {
             self.critique_depuis = -1;
         }
 
-        if pression.memoire_some >= optimisation.soutenue_seuil && !self.critique_actif {
+        if pression.some >= optimisation.soutenue_seuil && !self.critique_actif {
             if self.soutenue_depuis < 0 {
                 self.soutenue_depuis = maint;
             }
@@ -797,7 +797,7 @@ impl<'a, W: Write> Optimiseur<'a, W> {
                     Level::Warn,
                     &format!(
                         "optimisation : pression memoire soutenue ({:.1}% some)",
-                        pression.memoire_some
+                        pression.some
                     ),
                 );
                 if maint - self.dernier_recompress > optimisation.soutenue_duree * 3
@@ -815,7 +815,7 @@ impl<'a, W: Write> Optimiseur<'a, W> {
                     }
                 }
             }
-        } else if pression.memoire_some < optimisation.soutenue_seuil {
+        } else if pression.some < optimisation.soutenue_seuil {
             self.soutenue_depuis = -1;
         }
 
@@ -860,7 +860,7 @@ impl<'a, W: Write> Optimiseur<'a, W> {
         let top = self.sonde_processus();
         self.applique_affinites(&cpu.affinites, false);
 
-        if pression.memoire_some >= cpu.critique_seuil {
+        if pression.some >= cpu.critique_seuil {
             if self.cpu_critique_depuis < 0 {
                 self.cpu_critique_depuis = maint;
             }
@@ -872,20 +872,20 @@ impl<'a, W: Write> Optimiseur<'a, W> {
                         &format!(
                             "optimisation : pression cpu critique ({:.1}% tenu {}ms), \
                              principal consommateur {} (pid {}) {:.0} ms",
-                            pression.memoire_some, cpu.critique_duree, c.comm, c.pid, c.cpu_ms
+                            pression.some, cpu.critique_duree, c.comm, c.pid, c.cpu_ms
                         ),
                     ),
                     None => self.journal.write(
                         Level::Error,
                         &format!(
                             "optimisation : pression cpu critique ({:.1}% tenu {}ms)",
-                            pression.memoire_some, cpu.critique_duree
+                            pression.some, cpu.critique_duree
                         ),
                     ),
                 }
-                self.actions_cpu(&cpu, pression.memoire_some);
+                self.actions_cpu(&cpu, pression.some);
             }
-        } else if self.cpu_critique_actif && pression.memoire_some < cpu.critique_sortie {
+        } else if self.cpu_critique_actif && pression.some < cpu.critique_sortie {
             self.cpu_critique_actif = false;
             self.cpu_critique_depuis = -1;
             self.restaurer_demotes();
@@ -893,14 +893,14 @@ impl<'a, W: Write> Optimiseur<'a, W> {
                 Level::Info,
                 &format!(
                     "optimisation : pression cpu retombee ({:.1}%)",
-                    pression.memoire_some
+                    pression.some
                 ),
             );
-        } else if !self.cpu_critique_actif && pression.memoire_some < cpu.critique_sortie {
+        } else if !self.cpu_critique_actif && pression.some < cpu.critique_sortie {
             self.cpu_critique_depuis = -1;
         }
 
-        if pression.memoire_some >= cpu.soutenue_seuil && !self.cpu_critique_actif {
+        if pression.some >= cpu.soutenue_seuil && !self.cpu_critique_actif {
             if self.cpu_soutenue_depuis < 0 {
                 self.cpu_soutenue_depuis = maint;
             }
@@ -914,11 +914,11 @@ impl<'a, W: Write> Optimiseur<'a, W> {
                     Level::Warn,
                     &format!(
                         "optimisation : pression cpu soutenue ({:.1}% some){nom}",
-                        pression.memoire_some
+                        pression.some
                     ),
                 );
             }
-        } else if pression.memoire_some < cpu.soutenue_seuil {
+        } else if pression.some < cpu.soutenue_seuil {
             self.cpu_soutenue_depuis = -1;
         }
 
@@ -1087,16 +1087,17 @@ impl<'a, W: Write> Optimiseur<'a, W> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pression::{PressionCpu, PressionMemoire};
     use std::cell::RefCell;
     use std::collections::BTreeMap;
 
     struct CibleFausse {
         fichiers: RefCell<BTreeMap<PathBuf, String>>,
         zram: bool,
-        pression: RefCell<Pression>,
+        pression: RefCell<PressionMemoire>,
         total_psi: RefCell<u64>,
         total_fixe: bool,
-        pression_cpu: RefCell<Pression>,
+        pression_cpu: RefCell<PressionCpu>,
         processus: RefCell<Vec<ProcessusCpu>>,
         renices: RefCell<Vec<(i32, i32)>>,
         affinites: RefCell<Vec<(i32, Vec<usize>)>>,
@@ -1132,10 +1133,10 @@ mod tests {
             Self {
                 fichiers: RefCell::new(fichiers),
                 zram,
-                pression: RefCell::new(Pression::default()),
+                pression: RefCell::new(PressionMemoire::default()),
                 total_psi: RefCell::new(0),
                 total_fixe: false,
-                pression_cpu: RefCell::new(Pression::default()),
+                pression_cpu: RefCell::new(PressionCpu::default()),
                 processus: RefCell::new(Vec::new()),
                 renices: RefCell::new(Vec::new()),
                 affinites: RefCell::new(Vec::new()),
@@ -1156,7 +1157,7 @@ mod tests {
 
         fn fixe_pression_cpu(&self, some: f64) {
             let mut p = self.pression_cpu.borrow_mut();
-            p.memoire_some = some;
+            p.some = some;
             drop(p);
             if self.total_fixe {
                 return;
@@ -1168,8 +1169,8 @@ mod tests {
 
         fn fixe_pression(&self, some: f64, full: f64) {
             let mut p = self.pression.borrow_mut();
-            p.memoire_some = some;
-            p.memoire_full = full;
+            p.some = some;
+            p.full = full;
             drop(p);
             if self.total_fixe {
                 return;
@@ -1209,11 +1210,11 @@ mod tests {
             Ok(())
         }
 
-        fn lit_pression(&self) -> Result<Pression> {
+        fn lit_pression(&self) -> Result<PressionMemoire> {
             Ok(*self.pression.borrow())
         }
 
-        fn lit_pression_cpu(&self) -> Result<Pression> {
+        fn lit_pression_cpu(&self) -> Result<PressionCpu> {
             Ok(*self.pression_cpu.borrow())
         }
 
@@ -2108,7 +2109,7 @@ mod tests {
         let horloge = || *temps.borrow();
 
         // première passe : baseline des processus (pas de nommage)
-        cible.pression_cpu.borrow_mut().memoire_some = 90.0;
+        cible.pression_cpu.borrow_mut().some = 90.0;
         cible.processus.borrow_mut()[0].ticks = 0;
         o.pas(&horloge).expect("baseline");
 
@@ -2157,7 +2158,7 @@ mod tests {
         let horloge = || *temps.borrow();
 
         // le top est sshd : exception → pas de relégation même en critique
-        cible.pression_cpu.borrow_mut().memoire_some = 90.0;
+        cible.pression_cpu.borrow_mut().some = 90.0;
         cible.processus.borrow_mut()[0].comm = "sshd".to_string();
         o.pas(&horloge).expect("baseline");
         for _ in 0..3 {

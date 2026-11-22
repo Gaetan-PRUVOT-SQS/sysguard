@@ -45,11 +45,21 @@ pub fn cible_depuis_url(url: &str) -> Result<Cible> {
 }
 
 pub fn json_echappe(s: &str) -> String {
+    // RFC 8259 : guillemets, antislash et tous les caractères de contrôle
+    // U+0000 à U+001F doivent être échappés.
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
         match c {
             '"' => out.push_str("\\\""),
             '\\' => out.push_str("\\\\"),
+            '\u{08}' => out.push_str("\\b"),
+            '\u{0c}' => out.push_str("\\f"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => {
+                out.push_str(&format!("\\u{:04x}", c as u32));
+            }
             c => out.push(c),
         }
     }
@@ -178,6 +188,24 @@ mod tests {
         assert!(
             body.contains("\"message\":\"alerte 80 \\\"prioritaire\\\" hote-local\""),
             "{body}"
+        );
+    }
+
+    #[test]
+    fn json_echappe_caracteres_de_controle() {
+        // RFC 8259 : U+0000 à U+001F échappés, sinon le JSON du corps est invalide.
+        let brut = "ligne\n tab\t guillement \" citation \\ antislash \u{7} fin";
+        let echappe = json_echappe(brut);
+        assert_eq!(
+            echappe,
+            "ligne\\n tab\\t guillement \\\" citation \\\\ antislash \\u0007 fin"
+        );
+        // le résultat doit reformer un JSON valide
+        let corps = format!("{{\"message\":\"{echappe}\"}}");
+        assert!(corps.contains("\\n"), "{corps}");
+        assert!(
+            !corps.contains('\n'),
+            "aucun saut de ligne brut dans le corps"
         );
     }
 

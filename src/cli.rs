@@ -10,7 +10,7 @@ use crate::log::{Level, Logger};
 use crate::optimisation::Optimiseur;
 use crate::sys::SourceReelle;
 
-pub const VERSION: &str = "1.0.0";
+pub const VERSION: &str = "1.4.0";
 
 pub struct Options {
     pub commande: Option<String>,

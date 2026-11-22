@@ -413,3 +413,36 @@ Durcissements testés : BOM retiré, 100 niveaux → rejet propre, 10
 niveaux → OK, fuzz enrichi (3 graines × 300 entrées, unicode
 multi-octets). Couverture yaml.rs : 97,9 % lignes, 100 % branches,
 96,8 % régions. Suite : 179 unitaires verts, 6/6 suites.
+
+## Revue post-campagne : 4 correctifs — 2026-11-22
+
+Revue externe de la v1.4 (unité opt bloquante, JSON, modèle PSI,
+cohérence documentaire). Quatre correctifs avec validation :
+
+- **JSON webhooks** : `json_echappe` couvre désormais tous les caractères
+  de contrôle U+0000-U+001F (RFC 8259) ; un message avec retour à la
+  ligne produisait un corps JSON invalide. Test avec \n, \t, \u0007.
+- **Modèle PSI séparé** : `PressionMemoire` (some/full/total) et
+  `PressionCpu` (some/total) remplacent le champ unique trompeur où la
+  pression CPU atterrissait dans `memoire_some`.
+- **Unité sysguard-opt** : profil de privilèges minimal réécrit —
+  CapabilityBoundingSet limité à CAP_SYS_ADMIN (swapon) + CAP_SYS_MODULE
+  (modprobe enfant), ReadWritePaths=/etc/systemd, suppression de
+  PrivateDevices / ProtectKernelModules (incompatibles avec les
+  opérations zram), le reste du durcissement conservé. Validation VM :
+  provisionnement complet DANS le sandbox (zram0 prio 100, zstd,
+  swappiness 133, page-cluster 0, conf generator écrite), exposition
+  3,1/10.
+- **Version et comptes** : version produit 1.4.0 (Cargo.toml = source de
+  vérité), specs v0.1 marquées HISTORIQUES, comptes de tests harmonisés
+  (203 puis 207 avec les ajouts YAML).
+
+Découverte VM en validant le sandbox : **root sans CAP_DAC_OVERRIDE est
+soumis aux permissions DAC** — la config 640 sysguard:sysguard était
+illisible par l'unité opt (root, hors groupe). Correctif : config
+appartenant à root, groupe sysguard en lecture (640 root:sysguard),
+aucune capacité DAC ajoutée. Règle d'exploitation : les fichiers d'un
+service à capacités bornées appartiennent au service ou à son groupe.
+
+`make test` : 203 cas verts (181 unitaires + 26 intégration) ;
+couverture ≥ 90 ; clippy deny, fmt propres ; audit 0.

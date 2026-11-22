@@ -3,23 +3,37 @@ use std::path::Path;
 use crate::error::{Error, Result};
 use crate::file;
 
+/// Pression mémoire : lignes `some` et `full` de /proc/pressure/memory.
 #[derive(Debug, Default, PartialEq, Clone, Copy)]
-pub struct Pression {
-    pub memoire_some: f64,
-    pub memoire_full: f64,
-    pub cpu_some: f64,
+pub struct PressionMemoire {
+    pub some: f64,
+    pub full: f64,
     pub total_micros: u64,
 }
 
-pub fn lire_pression(chemin: &Path) -> Result<Pression> {
-    let mut tampon = [0u8; 1024];
-    let texte = file::read_proc(chemin, &mut tampon)?;
-    parse_pression(texte)
+/// Pression CPU : ligne `some` de /proc/pressure/cpu (full absent au
+/// niveau système depuis le noyau 5.13).
+#[derive(Debug, Default, PartialEq, Clone, Copy)]
+pub struct PressionCpu {
+    pub some: f64,
+    pub total_micros: u64,
 }
 
-pub fn parse_pression(texte: &str) -> Result<Pression> {
-    let mut p = Pression::default();
-    let mut vu_memoire_some = false;
+pub fn lire_pression(chemin: &Path) -> Result<PressionMemoire> {
+    let mut tampon = [0u8; 1024];
+    let texte = file::read_proc(chemin, &mut tampon)?;
+    parse_pression_memoire(texte)
+}
+
+pub fn lire_pression_cpu(chemin: &Path) -> Result<PressionCpu> {
+    let mut tampon = [0u8; 512];
+    let texte = file::read_proc(chemin, &mut tampon)?;
+    parse_pression_cpu(texte)
+}
+
+pub fn parse_pression_memoire(texte: &str) -> Result<PressionMemoire> {
+    let mut p = PressionMemoire::default();
+    let mut vu_some = false;
     for ligne in texte.lines() {
         let Some((genre, mesures)) = ligne.split_once(' ') else {
             continue;
@@ -41,15 +55,48 @@ pub fn parse_pression(texte: &str) -> Result<Pression> {
         }
         match genre {
             "some" => {
-                p.memoire_some = avg10;
-                vu_memoire_some = true;
+                p.some = avg10;
+                vu_some = true;
             }
-            "full" => p.memoire_full = avg10,
+            "full" => p.full = avg10,
             _ => {}
         }
     }
-    if !vu_memoire_some {
-        return Err(Error::new("psi illisible"));
+    if !vu_some {
+        return Err(Error::new("psi mémoire illisible"));
+    }
+    Ok(p)
+}
+
+pub fn parse_pression_cpu(texte: &str) -> Result<PressionCpu> {
+    let mut p = PressionCpu::default();
+    let mut vu_some = false;
+    for ligne in texte.lines() {
+        let Some((genre, mesures)) = ligne.split_once(' ') else {
+            continue;
+        };
+        let Some(avg10) = mesures
+            .split_whitespace()
+            .find_map(|c| c.strip_prefix("avg10="))
+            .and_then(|v| v.parse::<f64>().ok())
+        else {
+            continue;
+        };
+        if genre == "some"
+            && let Some(total) = mesures
+                .split_whitespace()
+                .find_map(|c| c.strip_prefix("total="))
+                .and_then(|v| v.parse::<u64>().ok())
+        {
+            p.total_micros = total;
+        }
+        if genre == "some" {
+            p.some = avg10;
+            vu_some = true;
+        }
+    }
+    if !vu_some {
+        return Err(Error::new("psi cpu illisible"));
     }
     Ok(p)
 }
@@ -158,24 +205,40 @@ mod tests {
     }
 
     #[test]
-    fn pression_complete() {
-        let p = parse_pression(&fixture("psi-memory")).expect("valide");
-        assert_eq!(p.memoire_some, 12.34);
-        assert_eq!(p.memoire_full, 3.21);
+    fn pression_memoire_complete() {
+        let p = parse_pression_memoire(&fixture("psi-memory")).expect("valide");
+        assert_eq!(p.some, 12.34);
+        assert_eq!(p.full, 3.21);
+        assert_eq!(p.total_micros, 123_456);
     }
 
     #[test]
-    fn pression_sans_full() {
-        let p = parse_pression("some avg10=1.50 avg60=0.00 avg300=0.00 total=0\n").expect("valide");
-        assert_eq!(p.memoire_some, 1.5);
-        assert_eq!(p.memoire_full, 0.0);
+    fn pression_cpu_separee() {
+        let texte = "some avg10=4.20 avg60=1.00 avg300=0.30 total=98765\n";
+        let p = parse_pression_cpu(texte).expect("valide");
+        assert_eq!(p.some, 4.2);
+        assert_eq!(p.total_micros, 98_765);
+        assert!(
+            parse_pression_cpu("full avg10=1.00\n").is_err(),
+            "cpu sans full"
+        );
+    }
+
+    #[test]
+    fn pression_memoire_sans_full() {
+        let p = parse_pression_memoire("some avg10=1.50 avg60=0.00 avg300=0.00 total=0\n")
+            .expect("valide");
+        assert_eq!(p.some, 1.5);
+        assert_eq!(p.full, 0.0);
+        assert_eq!(p.total_micros, 0);
     }
 
     #[test]
     fn pression_illisible() {
-        assert!(parse_pression("").is_err());
-        assert!(parse_pression("nimportequoi\n").is_err());
-        assert!(parse_pression("some avg10=abc\n").is_err());
+        assert!(parse_pression_memoire("").is_err());
+        assert!(parse_pression_memoire("nimportequoi\n").is_err());
+        assert!(parse_pression_memoire("some avg10=abc\n").is_err());
+        assert!(parse_pression_cpu("").is_err());
     }
 
     #[test]

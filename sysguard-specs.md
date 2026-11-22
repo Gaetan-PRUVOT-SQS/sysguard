@@ -2,7 +2,10 @@
 
 **Version** : 0.1 (draft)  
 **Date** : 20 novembre 2026  
-**Statut** : Proposition initiale  
+**Statut** : HISTORIQUE — spécification initiale du prototype Go. La
+version courante du produit est celle de `Cargo.toml` ; les éléments Go
+non portés (endpoint status, notifications desktop, export Prometheus)
+restent en roadmap (§10).  
 
 ---
 
