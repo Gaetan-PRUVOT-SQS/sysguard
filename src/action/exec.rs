@@ -125,12 +125,29 @@ mod tests {
         let pid: u32 = pid_descendance.trim().parse().expect("pid numerique");
         let mut mort = false;
         for _ in 0..15 {
-            if !std::path::Path::new(&format!("/proc/{pid}")).exists() {
+            if !vivant(pid) {
                 mort = true;
                 break;
             }
             thread::sleep(Duration::from_millis(100));
         }
         assert!(mort, "la descendance {pid} doit etre morte avec le groupe");
+    }
+
+    /// Vivant = présent dans /proc ET pas en état zombie : dans un
+    /// container, l'init du namespace récolte les orphelins tard, un
+    /// zombie tué par le SIGKILL ne prouve pas une survie.
+    fn vivant(pid: u32) -> bool {
+        match std::fs::read_to_string(format!("/proc/{pid}/stat")) {
+            Ok(s) => match s
+                .rsplit_once(')')
+                .map(|(_, reste)| reste.trim().chars().next())
+            {
+                Some(Some('Z')) | Some(Some('X')) => false,
+                Some(Some(_)) => true,
+                _ => false,
+            },
+            Err(_) => false,
+        }
     }
 }
