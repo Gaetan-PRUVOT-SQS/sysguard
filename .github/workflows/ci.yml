@@ -21,7 +21,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      diff: ${{ steps.fixes.outputs.diff }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
@@ -37,11 +39,15 @@ jobs:
       # (couverture, audit, test) est un incident, pas un correctif
       # automatique.
       - name: Auto-correctifs mecaniques
+        id: fixes
         run: |
           cargo fmt
           cargo clippy --fix --all-targets
-          if ! git diff --quiet; then
-            echo "DIFF=1" >> "$GITHUB_ENV"
+          if git diff --quiet; then
+            echo "diff=0" >> "$GITHUB_OUTPUT"
+          else
+            echo "diff=1" >> "$GITHUB_OUTPUT"
+            git diff > correctifs.patch
           fi
 
       # Relance : la campagne complete sur l'arbre corrige. Elle doit
@@ -49,18 +55,50 @@ jobs:
       - name: Relance de la campagne complete
         run: make campagne
 
-      - name: Commit du correctif mecanique
-        if: env.DIFF == '1' && github.event_name == 'push'
+      - name: Piece jointe du correctif
+        if: steps.fixes.outputs.diff == '1'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: correctifs-mecaniques
+          path: correctifs.patch
+          retention-days: 7
+
+      - name: Correctifs non poussables sur une PR
+        if: steps.fixes.outputs.diff == '1' && github.event_name == 'pull_request'
+        run: |
+          git diff --stat
+          echo "correctifs mecaniques disponibles : lancer cargo fmt et cargo clippy --fix localement"
+          exit 1
+
+  correctif:
+    name: Commit du correctif mecanique
+    needs: campagne
+    if: needs.campagne.outputs.diff == '1' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          token: ${{ secrets.CI_PUSH_TOKEN || github.token }}
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@2201cc584a476d1b508be977bbe4b7d1c7a52e9c # v2.9.3
+
+      # Meme correctif que celui relance et prouve par le job campagne :
+      # fmt et clippy refaits ici sur le meme arbre.
+      - name: Refaire les correctifs mecaniques
+        run: |
+          cargo fmt
+          cargo clippy --fix --all-targets
+          git diff --quiet && echo "aucun correctif a committer" && exit 0
+
+      - name: Commit et push
         run: |
           git config user.name "Gaetan PRUVOT"
           git config user.email "pruvot.gaetan@gmail.com"
           git add -u
           git commit -m "CI : formatage et corrections clippy automatiques"
           git push origin HEAD:main
-
-      - name: Correctifs non poussables sur une PR
-        if: env.DIFF == '1' && github.event_name == 'pull_request'
-        run: |
-          git diff --stat
-          echo "correctifs mecaniques disponibles : lancer cargo fmt et cargo clippy --fix localement"
-          exit 1
