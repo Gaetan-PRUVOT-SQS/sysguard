@@ -1,7 +1,9 @@
 pub mod actions;
 pub mod condition;
+pub mod cpu;
 pub mod global;
 pub mod optimisation;
+pub use cpu::Cpu;
 pub use optimisation::Optimisation;
 pub mod regles;
 
@@ -123,6 +125,7 @@ pub struct Config {
     pub niveau_log: Level,
     pub regles: Vec<Regle>,
     pub optimisation: Option<optimisation::Optimisation>,
+    pub cpu: Option<cpu::Cpu>,
 }
 
 impl Default for Config {
@@ -134,6 +137,7 @@ impl Default for Config {
             niveau_log: Level::Info,
             regles: Vec::new(),
             optimisation: None,
+            cpu: None,
         }
     }
 }
@@ -159,6 +163,7 @@ fn parse_racine(racine: &Node) -> Result<Config> {
             "global" => global::parse(noeud, &mut cfg)?,
             "rules" => regles::parse(noeud, &mut cfg)?,
             "optimisation" => cfg.optimisation = Some(optimisation::parse(noeud)?),
+            "cpu" => cfg.cpu = Some(cpu::parse(noeud)?),
             _ => return Err(Error::new(format!("cle inconnue : {cle}"))),
         }
     }
